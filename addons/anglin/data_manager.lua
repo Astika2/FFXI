@@ -43,6 +43,27 @@ local dailyFile = nil
 local lifetimeFile = nil
 
 -- ==============================
+-- Daily reset callback (to be set by main addon)
+-- ==============================
+local daily_reset_callback = nil
+
+local function set_daily_reset_callback(callback)
+    daily_reset_callback = callback
+end
+
+-- ==============================
+-- Helper: Get current JST date correctly
+-- ==============================
+local function get_jst_date()
+    -- Get UTC time
+    local utc_time = os.time(os.date("!*t"))
+    -- Add 9 hours for JST (32400 seconds)
+    local jst_time = utc_time + (9 * 3600)
+    -- Return date in JST
+    return os.date('%Y-%m-%d', jst_time)
+end
+
+-- ==============================
 -- Helper: Update file paths based on player name
 -- ==============================
 local function update_file_paths(playerName)
@@ -102,7 +123,7 @@ local function ensure_tables()
     state.daily.baitLost     = state.daily.baitLost     or {}
     state.daily.lureLost     = state.daily.lureLost     or {}
     state.daily.rodBreaks    = state.daily.rodBreaks    or {}
-    state.daily.date         = state.daily.date or os.date('%Y-%m-%d')
+    state.daily.date         = state.daily.date or get_jst_date()
 
     -- Lifetime
     state.lifetime = state.lifetime or {}
@@ -225,9 +246,7 @@ end
 local function check_daily_reset()
     initialize_player_data()  -- Ensure we have current player data
     
-    local now = os.time()
-    local jst = now + (9 * 3600) -- UTC+9
-    local today = os.date('%Y-%m-%d', jst)
+    local today = get_jst_date()
 
     if state.daily.date ~= today then
         state.daily.fishCaught   = {}
@@ -238,6 +257,12 @@ local function check_daily_reset()
         state.daily.rodBreaks    = {}
         state.daily.date         = today
         save_state()
+        
+        -- Notify the main addon that daily reset occurred
+        if daily_reset_callback then
+            daily_reset_callback()
+        end
+        
         return true  -- Reset occurred
     end
     return false  -- No reset needed
@@ -247,9 +272,7 @@ end
 -- Reset daily stats only
 -- ==============================
 local function reset_daily_stats()
-    local now = os.time()
-    local jst = now + (9 * 3600) -- UTC+9
-    local today = os.date('%Y-%m-%d', jst)
+    local today = get_jst_date()
     
     state.daily.fishCaught   = {}
     state.daily.baitUsed     = {}
@@ -342,6 +365,8 @@ data.record_bait_lost = record_bait_lost
 data.record_lure_lost = record_lure_lost
 data.record_rod_break = record_rod_break
 data.initialize_player_data = initialize_player_data
+data.set_daily_reset_callback = set_daily_reset_callback
+data.get_jst_date = get_jst_date  -- Expose for debugging
 
 -- Initialize on load
 initialize_player_data()

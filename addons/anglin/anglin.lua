@@ -1,7 +1,7 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '1.0'
-addon.desc      = 'Based off/inspired by Thorny\'s "Fishaid" plugin, with more insight and tracking'
+addon.version   = '1.1'
+addon.desc      = 'Based off of Thorny\'s "Fishaid" plugin, with more insight and tracking'
 addon.link      = 'https://ashitaxi.com/'
 
 require('common')
@@ -38,7 +38,9 @@ local state = {
     
     -- Fishing session tracking
     Hook = nil,
+    HookColor = nil,  -- Store the color for the hook text
     Feel = nil,
+    FeelColor = nil,  -- Store the color for the feel text
     Fish = nil,
     CatchCount = 1,
     BaitBeforeCast = nil,
@@ -164,7 +166,7 @@ local hookMessages = {
     { message='Something caught the hook!!!', hook='Large Fish', color='|cFF00FF00|', logcolor=204 },
     { message='Something caught the hook!', hook='Small Fish', color='|cFF00FF00|', logcolor=204 },
     { message='You feel something pulling at your line.', hook='Item', color='|cFF999900|', logcolor=141 },
-    { message='Something clamps onto your line ferociously!', hook='Monster', color='|cFF8b0000|', logcolor=167 },
+    { message='Something clamps onto your line ferociously!', hook='Monster', color='|cffff0000|', logcolor=167 },
 }
 
 local feelMessages = {
@@ -260,6 +262,12 @@ local function clean_fish_name(fishname)
     return cleaned
 end
 
+-- Convert color code to hex to add color to status window
+local function parse_color(colorString)
+    if not colorString then return 0xFFFFFFFF end
+    local hex = colorString:match("|c(F+%x+)|")
+    return hex and tonumber("0x" .. hex) or 0xFFFFFFFF
+end
 
 -- Update playerName with character name
 local function update_player_name()
@@ -370,7 +378,9 @@ end
 -- Reset fishing session
 local function reset_fishing_session()
     state.Hook = nil
+    state.HookColor = nil
     state.Feel = nil
+    state.FeelColor = nil
     state.Fish = nil
     state.CatchCount = 1
     state.BaitBeforeCast = nil
@@ -386,6 +396,13 @@ ashita.events.register('load', 'load_cb', function()
     update_player_name()
     state.Settings = settings.load(defaults)
     state.Font = fonts.new(state.Settings.Font)
+    
+    -- Set up callback to mark cache as dirty when daily reset occurs
+    data.set_daily_reset_callback(function()
+        statsCache.dailyDirty = true
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo [Anglin] Daily stats have been reset (new day in JST)')
+    end)
+    
     data.check_daily_reset()
 end)
 
@@ -409,6 +426,7 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
     for _, entry in ipairs(hookMessages) do
         if msg:find(entry.message, 1, true) then
             state.Hook = entry.hook
+			state.HookColor = parse_color(entry.color)
             state.Active = true
             detect_bait()
             detect_rod()
@@ -424,6 +442,7 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
     for _, entry in ipairs(feelMessages) do
         if msg:find(entry.message, 1, true) then
             state.Feel = entry.feel
+            state.FeelColor = parse_color(entry.color)
             return
         end
     end
@@ -495,6 +514,7 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
         reset_fishing_session()
         return
     end
+	
 end)
 
 -- Command handler
@@ -527,17 +547,17 @@ ashita.events.register('command', 'anglin_command', function(e)
     elseif subcmd == 'guide' then
         showGuide = not showGuide
         AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
-    
+    -- Add this to your command handler in anglin.lua, in the command event handler:
+
     else
         AshitaCore:GetChatManager():QueueCommand(1,
-            string.format('/echo \\cs(255,0,0)Unknown subcommand:\\cr %s', args[2])
+            string.format('/echo Unknown subcommand: %s', args[2])
         )
     end
 end)
 
 -- ImGui Render
 ashita.events.register('d3d_present', 'anglin_render', function()
-    if not state.Settings then return end
     
     -- Fishing Guide window
     if showGuide then
@@ -868,8 +888,27 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     imgui.PushFont(nil)
     imgui.SetWindowFontScale(1.2)
 
-    imgui.Text(string.format("Hook Type: %s", state.Hook or "Waiting..."))
-    imgui.Text(string.format("Feeling: %s", state.Feel or "Waiting..."))
+    -- Display hook type with color
+    if state.Hook then
+        imgui.Text("Hook Type: ")
+        imgui.SameLine()
+        imgui.PushStyleColor(ImGuiCol_Text, state.HookColor or 0xFFFFFFFF)
+        imgui.Text(state.Hook)
+        imgui.PopStyleColor()
+    else
+        imgui.Text("Hook Type: Waiting...")
+    end
+    
+    -- Display feeling with color
+    if state.Feel then
+        imgui.Text("Feeling: ")
+        imgui.SameLine()
+        imgui.PushStyleColor(ImGuiCol_Text, state.FeelColor or 0xFFFFFFFF)
+        imgui.Text(state.Feel)
+        imgui.PopStyleColor()
+    else
+        imgui.Text("Feeling: Waiting...")
+    end
     
     if state.Fish then
         local displayFish = clean_fish_name(state.Fish)
@@ -891,7 +930,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         state.Active = false
         windowPosSet = false
         reset_fishing_session()
-    end 
+    end
 
     imgui.PopFont()
 
