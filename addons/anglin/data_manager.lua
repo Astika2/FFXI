@@ -14,6 +14,7 @@ local state = {
     daily = {
         date = nil,
         fishCaught = {},
+        itemCaught = {},  -- NEW: Track items separately
         baitUsed = {},
         baitConsumed = {},
         baitLost = {},
@@ -22,6 +23,7 @@ local state = {
     },
     lifetime = {
         fishCaught = {},
+        itemCaught = {},  -- NEW: Track items separately
         baitUsed = {},
         baitConsumed = {},
         baitLost = {},
@@ -118,6 +120,7 @@ local function ensure_tables()
     -- Daily
     state.daily = state.daily or {}
     state.daily.fishCaught   = state.daily.fishCaught   or {}
+    state.daily.itemCaught   = state.daily.itemCaught   or {}  -- NEW
     state.daily.baitUsed     = state.daily.baitUsed     or {}
     state.daily.baitConsumed = state.daily.baitConsumed or {}
     state.daily.baitLost     = state.daily.baitLost     or {}
@@ -128,6 +131,7 @@ local function ensure_tables()
     -- Lifetime
     state.lifetime = state.lifetime or {}
     state.lifetime.fishCaught   = state.lifetime.fishCaught   or {}
+    state.lifetime.itemCaught   = state.lifetime.itemCaught   or {}  -- NEW
     state.lifetime.baitUsed     = state.lifetime.baitUsed     or {}
     state.lifetime.baitConsumed = state.lifetime.baitConsumed or {}
     state.lifetime.baitLost     = state.lifetime.baitLost     or {}
@@ -250,6 +254,7 @@ local function check_daily_reset()
 
     if state.daily.date ~= today then
         state.daily.fishCaught   = {}
+        state.daily.itemCaught   = {}  -- NEW
         state.daily.baitUsed     = {}
         state.daily.baitConsumed = {}
         state.daily.baitLost     = {}
@@ -275,6 +280,7 @@ local function reset_daily_stats()
     local today = get_jst_date()
     
     state.daily.fishCaught   = {}
+    state.daily.itemCaught   = {}  -- NEW
     state.daily.baitUsed     = {}
     state.daily.baitConsumed = {}
     state.daily.baitLost     = {}
@@ -290,6 +296,7 @@ end
 -- ==============================
 local function reset_lifetime_stats()
     state.lifetime.fishCaught   = {}
+    state.lifetime.itemCaught   = {}  -- NEW
     state.lifetime.baitUsed     = {}
     state.lifetime.baitConsumed = {}
     state.lifetime.baitLost     = {}
@@ -302,11 +309,21 @@ end
 -- ==============================
 -- Record Functions
 -- ==============================
-local function record_fish(name, amount)
+local function record_fish(name, amount, isItem)
     initialize_player_data()  -- Ensure we have current player data
     amount = amount or 1
+    isItem = isItem or false
+    
+    -- Always add to fishCaught for backward compatibility
     inc(state.daily.fishCaught, name, amount)
     inc(state.lifetime.fishCaught, name, amount)
+    
+    -- If it's an item, also mark it in itemCaught
+    if isItem then
+        inc(state.daily.itemCaught, name, amount)
+        inc(state.lifetime.itemCaught, name, amount)
+    end
+    
     save_state()
 end
 

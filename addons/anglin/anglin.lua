@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '1.2'
+addon.version   = '1.25'
 addon.desc      = 'Based off of Thorny\'s "Fishaid" plugin, with more insight and tracking'
 addon.link      = 'https://ashitaxi.com/'
 
@@ -44,6 +44,7 @@ local state = {
     Fish = nil,
     CatchCount = 1,
     BaitBeforeCast = nil,
+    IsItem = false,  -- Track if current catch is an item
     
     -- Auto-close tracking
     CloseTime = nil,
@@ -155,30 +156,43 @@ local baitTypes = {
 
 -- Fishing guide data
 local fishingGuide = {
-    { name = "Phanauet Newt", skill = 4, location = "Carpenters' Landing, Phanauet Channel", bait = "Lufaise Fly, Shell Bug", rod = "Halcyon" },
-    --{ name = "Denizanasi", skill = 5, location = "Nashmau, Aht Urhgan Whitegate", bait = "Little Worm, Sabiki Rig", rod = "Halcyon" },
+	{ name = "Bibiki Urchin", skill = 3, location = "Bibiki Bay (Docks), Manaclipper (Purgonorgo Isle)", bait = "Robber Rig, Slice of Bluetail", rod = "Lu Shang's" },
+	{ name = "Phanauet Newt", skill = 4, location = "Carpenters' Landing, Phanauet Channel", bait = "Lufaise Fly, Shell Bug", rod = "Halcyon" },
     { name = "Cobalt Jellyfish", skill = 5, location = "Mhaura, Selbina, Qufim Island", bait = "Sabiki Rig, Little Worm", rod = "Halcyon" },
     { name = "Crayfish", skill = 7, location = "W. Ronfaure (Knightwell), Bastok Mines", bait = "Little Worm, Peeled Crayfish", rod = "Halcyon" },
-    { name = "Bastore Sardine", skill = 9, location = "Any coastal area", bait = "Lugworm, Sabiki Rig", rod = "Halcyon" },
-    --{ name = "Hamsi", skill = 9, location = "Nashmau, Aht Urhgan Whitegate", bait = "Lugworm, Sabiki Rig", rod = "Halcyon" },
+    { name = "Bibikibo", skill = 8, location = "Bibiki Bay (Purgonorgo Isle), Manaclipper (Purgonorgo Isle)", bait = "Fly Lure", rod = "Lu Shang's" },
+	{ name = "Bastore Sardine", skill = 9, location = "Any coastal area", bait = "Lugworm, Sabiki Rig", rod = "Halcyon" },
     { name = "Moat Carp", skill = 11, location = "W. Ronfaure (Knightwell), E. Sarutabaruta (Lake)", bait = "Insect Paste, Little Worm", rod = "Halcyon" },
-    { name = "Yellow Globe", skill = 14, location = "Mhaura Docks, Selbina", bait = "Sabiki Rig, Crayfish Paste", rod = "Halcyon" },
+    { name = "Greedie", skill = 14, location = "Misareaux Coast, Cape Terrigan, Lufaise Meadows, Selbina, Valkurm Dunes", bait = "Minnow", rod = "Halcyon" },
+	{ name = "Copper Frog", skill = 16, location = "Bastok Mines, Zeruhn Mines, Passhow Marshlands, Eastern Altepa Desert", bait = "Fly Lure", rod = "Halcyon" },
+	{ name = "Yellow Globe", skill = 17, location = "Mhaura Docks, Selbina", bait = "Sabiki Rig, Crayfish Paste", rod = "Halcyon" },
     { name = "Muddy Siredon", skill = 18, location = "Carpenters' Landing (North)", bait = "Fly Lure, Lufaise Fly", rod = "Halcyon, Composite" },
-    { name = "Quus", skill = 19, location = "Korroloka Tunnel (pond), Port Windurst", bait = "Sabiki Rig, Lugworm", rod = "Halcyon" },
-    { name = "Cheval Salmon", skill = 21, location = "E. Ronfaure (River), Jugner Forest", bait = "Fly Lure", rod = "Halcyon, Hume" },
-    { name = "Forest Carp", skill = 21, location = "Yhoator Jungle, Windurst Woods", bait = "Insect Paste, Insect Ball", rod = "Halcyon" },
-    { name = "Nebimonite", skill = 27, location = "Mhaura/Selbina Ferry", bait = "Shrimp Lure, Crayfish Ball", rod = "Halcyon" },
-    { name = "Tricolored Carp", skill = 27, location = "E. Sarutabaruta (pond), N. Gustaberg", bait = "Insect Ball, Shrimp Lure", rod = "Halcyon" },
+    { name = "Quus", skill = 19, location = "Bibiki Bay (Purgonorgo Isle), Cape Terrigan, Mhaura/Selbina Ferry, Kazham, Korroloka Tunnel, Lufaise Meadows, Norg, Port Bastok, Port Windurst, Sea Serpent Grotto, Selbina, S. Gustaberg, Valkurm Dunes, W. Sarutabaruta (Sea)", bait = "Sabiki Rig, Robber Rig, Lugworm", rod = "Halcyon" },
+    { name = "Forest Carp", skill = 20, location = "Yhoator Jungle, Windurst Woods", bait = "Insect Paste, Insect Ball", rod = "Halcyon" },
+	{ name = "Cheval Salmon", skill = 21, location = "E. Ronfaure (River), Jugner Forest", bait = "Fly Lure", rod = "Halcyon, Hume" },
+	{ name = "Fat Greedie", skill = 24, location = "Selbina", bait = "Peeled Crayfish, Shrimp Lure", rod = "Halcyon" },
+    { name = "Moorish Idol", skill = 26, location = "Bibiki Bay (Purgonorgo Isle), Manaclipper (All)", bait = "Shrimp Lure, Worm Lure, Peeled Crayfish", rod = "Halcyon" },
+	{ name = "Nebimonite", skill = 27, location = "Mhaura/Selbina Ferry", bait = "Shrimp Lure, Crayfish Ball", rod = "Halcyon" },
+    { name = "Tricolored Carp", skill = 27, location = "Jugner Forest, Giddeus, Bastok Markets, Bastok Mines, The Boyahda Tree, Davoi, East Ronfaure, Ghelsba Outpost, Gusgen Mines, North Gustaberg, Northern San d'Oria, Palborough Mines, Phanauet Channel, Port San d'Oria, Zeruhn Mines", bait = "Insect Ball, Shrimp Lure", rod = "Halcyon" },
+	{ name = "Blindfish", skill = 28, location = "Oldton Movalpolos", bait = "Insect Ball", rod = "Composite" },
     { name = "Pipira", skill = 29, location = "Windurst Waters", bait = "Minnow", rod = "Halcyon" },
     { name = "Tiger Cod", skill = 29, location = "Qufim Island (coastal), Sauromugue", bait = "Shrimp Lure, Sardine Ball", rod = "Composite" },
-    { name = "Ogre Eel", skill = 35, location = "S. Gustaberg (sea), E./W. Sarutabaruta (sea)", bait = "Shrimp Lure, Minnow", rod = "Composite" },
-    { name = "Shining Trout", skill = 37, location = "E. Ronfaure (River), La Theine Plateau", bait = "Fly Lure, Minnow", rod = "Halcyon" },
+    { name = "Elshimo Frog", skill = 30, location = "Yhoator Jungle", bait = "Fly Lure", rod = "Halcyon, Composite" },
+	{ name = "Giant Catfish", skill = 31, location = "Zeruhn Mines, Jugner Forest, Bastok Markets, Carpenters' Landing (Central), Davoi (Pond), Giddeus (Pond), La Theine Plateau, Pashhow Marshlands, Phanauet Channel (Emfea Waterway, Newtpool), Rolanberry Fields (Lake), West Ronfaure (Knightwell), West Sarutabaruta (Pond), Western Altepa Desert", bait = "Minnow, Sinking Minnow", rod = "Lu Shang's" },
+	{ name = "Lungfish", skill = 31, location = "Phanauet Channel", bait = "Shrimp Lure", rod = "Halcyon" },
+	{ name = "Dark Bass", skill = 33, location = "Jugner Forest (Lake), Bastok Markets, The Boyahda Tree, Carpenters' Landing, Davoi (Pond), Giddeus, La Theine Plateau, Lufaise Meadows (Leremieu Lagoon), Misareaux Coast (Cascade Edellaine), Phanauet Channel, Rolanberry Fields (Lake), The Sanctuary of Zi'Tah, West Sarutabaruta (Pond)", bait = "Minnow, Trout Ball", rod = "Halcyon, Composite" },
+	{ name = "Crystal Bass", skill = 33, location = "Jugner Forest", bait = "Minnow, Sinking Minnow", rod = "Halcyon" },
+	{ name = "Ogre Eel", skill = 35, location = "S. Gustaberg (sea), E./W. Sarutabaruta (sea)", bait = "Shrimp Lure, Minnow", rod = "Composite" },
+	{ name = "Shining Trout", skill = 37, location = "E. Ronfaure (River), La Theine Plateau", bait = "Fly Lure, Minnow", rod = "Halcyon" },
     { name = "Nosteau Herring", skill = 39, location = "Qufim Island (coastal)", bait = "Sardine Ball", rod = "Halcyon" },
     { name = "Coral Butterfly", skill = 40, location = "Kazham", bait = "Worm Lure", rod = "Halcyon" },
     { name = "Gugru Tuna", skill = 41, location = "Mhaura/Selbina Ferry", bait = "Minnow, Shrimp Lure", rod = "Composite" },
-    { name = "Black Eel", skill = 47, location = "Zeruhn Mines (river)", bait = "Worm Lure, Trout Ball", rod = "Composite" },
+    { name = "Zafmlug Bass", skill = 43, location = "Bibiki Bay, Valkurm Dunes, Selbina, South Gustaberg, Manaclipper (All), Cape Terrigan, Port Bastok", bait = "Minnow", rod = "Lu Shang's" },
+	{ name = "Gold Lobster", skill = 46, location = "Den of Rancor, E. Sarutabaruta, Sea Serpent Grotto, S. Gustaberg, W. Sarutabaruta", bait = "Sinking Minnow", rod = "Lu Shang's" },
+	{ name = "Black Eel", skill = 47, location = "Zeruhn Mines (river)", bait = "Worm Lure, Trout Ball", rod = "Composite" },
     { name = "Cone Calamary", skill = 48, location = "Mhaura/Selbina Ferry, Batallia Downs", bait = "Minnow, Sliced Cod", rod = "Composite" },
     { name = "Icefish", skill = 49, location = "Beaucedine Glacier (pond)", bait = "Sabiki Rig", rod = "Halcyon" },
+	{ name = "Sandfish", skill = 50, location = "Rabao, E. Altepa Desert, Korroloka Tunnel, Kuftal Tunnel, W. Altepa Desert", bait = "Worm Lure", rod = "Composite" },
     { name = "Giant Donko", skill = 50, location = "Rabao, E. Altepa Desert (oasis)", bait = "Frog Lure, Trout Ball", rod = "Composite" },
     { name = "Bluetail", skill = 55, location = "Qufim Island, W. Sarutabaruta", bait = "Minnow, Sliced Sardine", rod = "Composite" },
     { name = "Gold Carp", skill = 56, location = "Windurst Waters, E. Sarutabaruta (pond)", bait = "Insect Paste, Little Worm", rod = "Halcyon" },
@@ -191,13 +205,8 @@ local fishingGuide = {
     { name = "Silver Shark", skill = 76, location = "Mhaura/Selbina Ferry", bait = "Slice of Bluetail", rod = "Lu Shang's" },
     { name = "Gavial Fish", skill = 81, location = "N. Gustaberg (Drachenfall)", bait = "Frog Lure, Meatball", rod = "Composite, Lu Shang's" },
     { name = "Bastore Bream", skill = 86, location = "Port Windurst, Port Bastok", bait = "Shrimp Lure", rod = "Composite" },
-    --{ name = "Mercanbaligi", skill = 86, location = "Nashmau", bait = "Shrimp Lure", rod = "Lu Shang's" },
-    --{ name = "Ahtapot", skill = 90, location = "Nashmau", bait = "Shrimp Lure, Lugworm", rod = "Lu Shang's" },
-    --{ name = "Gigant Squid", skill = 91, location = "Nashmau", bait = "Lugworm", rod = "Lu Shang's" },
     { name = "Emperor Fish", skill = 91, location = "Beaucedine Glacier (pond)", bait = "Trout Ball, Peeled Crayfish", rod = "Lu Shang's" },
     { name = "Black Sole", skill = 96, location = "Qufim Island (Ice Pond), Port Jeuno", bait = "Sinking Minnow, Sliced Cod", rod = "Lu Shang's" },
-    --{ name = "Dil", skill = 96, location = "Talacca Cove", bait = "Sliced Cod", rod = "Lu Shang's" },
-    --{ name = "Pterygotus", skill = 99, location = "Nashmau", bait = "Lugworm", rod = "Lu Shang's" },
     { name = "Takitaro", skill = 100, location = "N. Gustaberg, Tahrongi Canyon", bait = "Frog Lure, Minnow", rod = "Lu Shang's" },
     { name = "Ryugu Titan", skill = 100, location = "Mhaura/Selbina Ferry", bait = "Meatball", rod = "Lu Shang's" },
 	{ name = "Armored Pisces", skill = 108, location = "Oldton Movalpolos", bait = "Frog Lure", rod = "Composite, Lu Shang's" },
@@ -205,10 +214,10 @@ local fishingGuide = {
 
 -- Hook and feel messages
 local hookMessages = {
-    { message='Something caught the hook!!!', hook='Large Fish', color='|cFF00FF00|', logcolor=204 },
-    { message='Something caught the hook!', hook='Small Fish', color='|cFF00FF00|', logcolor=204 },
-    { message='You feel something pulling at your line.', hook='Item', color='|cFFFFFF00|', logcolor=141 },
-    { message='Something clamps onto your line ferociously!', hook='Monster', color='|cFFFF0000|', logcolor=167 },
+    { message='Something caught the hook!!!', hook='Large Fish', color='|cFF00FF00|', logcolor=204, isItem=false },
+    { message='Something caught the hook!', hook='Small Fish', color='|cFF00FF00|', logcolor=204, isItem=false },
+    { message='You feel something pulling at your line.', hook='Item', color='|cFFFFFF00|', logcolor=141, isItem=true },
+    { message='Something clamps onto your line ferociously!', hook='Monster', color='|cFFFF0000|', logcolor=167, isItem=false },
 }
 
 local feelMessages = {
@@ -224,14 +233,26 @@ local feelMessages = {
 
 -- Helper function to build stats cache
 local function build_stats_cache(sourceData, cacheData)
-    -- Fish caught
+    -- Fish caught (separate fish and items)
     cacheData.totalFish = 0
+    cacheData.totalItems = 0
     cacheData.fishList = {}
-    for fish, count in pairs(sourceData.fishCaught) do
-        cacheData.totalFish = cacheData.totalFish + count
-        table.insert(cacheData.fishList, {name = fish, count = count})
+    cacheData.itemList = {}
+    
+    for name, count in pairs(sourceData.fishCaught) do
+        if sourceData.itemCaught and sourceData.itemCaught[name] then
+            -- This is an item
+            cacheData.totalItems = cacheData.totalItems + count
+            table.insert(cacheData.itemList, {name = name, count = count})
+        else
+            -- This is a fish
+            cacheData.totalFish = cacheData.totalFish + count
+            table.insert(cacheData.fishList, {name = name, count = count})
+        end
     end
+    
     table.sort(cacheData.fishList, function(a, b) return a.count > b.count end)
+    table.sort(cacheData.itemList, function(a, b) return a.count > b.count end)
     
     -- Bait used
     cacheData.baitList = {}
@@ -683,6 +704,7 @@ local function reset_fishing_session()
     state.BaitBeforeCast = nil
     state.CloseTime = nil
     state.Active = false
+    state.IsItem = false
     windowPosSet = false
     
     -- Mark stats as dirty so they'll be rebuilt next time
@@ -740,6 +762,7 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
             state.Hook = entry.hook
             state.HookColor = parse_color(entry.color)
             state.Active = true
+            state.IsItem = entry.isItem  -- Track if this is an item
             detect_bait()
             detect_rod()
             state.BaitBeforeCast = state.CurrentBait
@@ -767,7 +790,7 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
             fishName = clean_fish_name(fishName)
             state.Fish = fishName
             state.CatchCount = tonumber(count)
-            data.record_fish(fishName, state.CatchCount)
+            data.record_fish(fishName, state.CatchCount, state.IsItem)
             
             if state.BaitBeforeCast and state.CurrentBaitType and state.CurrentBaitType.consumable then
                 data.record_bait_consumed(state.BaitBeforeCast, state.CatchCount)
@@ -783,7 +806,7 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
             fishName = clean_fish_name(fishName)
             state.Fish = fishName
             state.CatchCount = 1
-            data.record_fish(fishName, 1)
+            data.record_fish(fishName, 1, state.IsItem)
             
             if state.BaitBeforeCast and state.CurrentBaitType and state.CurrentBaitType.consumable then
                 data.record_bait_consumed(state.BaitBeforeCast, 1)
@@ -795,7 +818,7 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
     end
 
     -- 4. Check for bait/lure lost messages
-    if cleanMsg:find('line snaps', 1, true) or cleanMsg:find('lost your catch', 1, true) then
+    if cleanMsg:find('line snaps', 1, true) then
         if state.BaitBeforeCast and state.CurrentBaitType then
             if state.CurrentBaitType.consumable then
                 data.record_bait_lost(state.BaitBeforeCast, 1)
@@ -816,20 +839,9 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
         return
     end
 
-    -- 6. Check for line snap/break (lost fish)
-    if cleanMsg:find('line snaps', 1, true) then
-        if state.BaitBeforeCast and state.CurrentBaitType then
-            if state.CurrentBaitType.consumable then
-                data.record_bait_lost(state.BaitBeforeCast, 1)
-            end
-        end
-        reset_fishing_session()
-        return
-    end
-
-    -- 7. Check for cancelled cast
+    -- 6. Check for cancelled cast
     if cleanMsg:find('You didn\'t catch anything', 1, true) or 
-       cleanMsg:find('You give up fishing', 1, true) or
+       cleanMsg:find('You give up and reel in your line', 1, true) or
        cleanMsg:find('The fish got away', 1, true) then
         reset_fishing_session()
         return
@@ -844,30 +856,13 @@ ashita.events.register('command', 'anglin_command', function(e)
     e.blocked = true
 
     if (#args == 1) then
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin test | /anglin stats | /anglin settings | /anglin guide')
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide')
         return
     end
 
     local subcmd = args[2]:lower()
     
-    if subcmd == 'test' then
-        detect_bait()
-        detect_rod()
-        AshitaCore:GetChatManager():QueueCommand(1, string.format(
-            '/echo Current Bait: %s | Rod: %s', state.CurrentBait or 'Unknown', state.CurrentRod or 'Unknown'))
-    
-    elseif subcmd == 'debug' then
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo === Caught Fish (Lifetime) ===')
-        local count = 0
-        for fishName, fishCount in pairs(data.state.lifetime.fishCaught) do
-            AshitaCore:GetChatManager():QueueCommand(1, string.format('/echo [%s] = %d', fishName, fishCount))
-            count = count + 1
-        end
-        if count == 0 then
-            AshitaCore:GetChatManager():QueueCommand(1, '/echo No fish caught yet')
-        end
-    
-    elseif subcmd == 'stats' then
+    if subcmd == 'stats' then
         showStats = not showStats
         AshitaCore:GetChatManager():QueueCommand(1, '/echo Stats window toggled.')
     
@@ -972,9 +967,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         imgui.Indent()
                         
                         -- Show catch count if caught
-                         -- Show catch count if caught
                         if caught then
-                            -- Try exact match first, then try all stored fish names
                             local catchCount = 0
                             for caughtFish, count in pairs(data.state.lifetime.fishCaught) do
                                 if caughtFish:lower() == fish.name:lower() then
@@ -1055,13 +1048,26 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     -- Fish Caught
                     if imgui.CollapsingHeader("Fish Caught", ImGuiTreeNodeFlags_DefaultOpen) then
-                        imgui.Text(string.format("Total: %d", dailyData.totalFish))
+                        imgui.Text(string.format("Total Fish: %d", dailyData.totalFish))
+                        imgui.Text(string.format("Total Items: %d", dailyData.totalItems))
                         imgui.Separator()
+                        
+                        -- Display fish
                         for _, entry in ipairs(dailyData.fishList) do
                             imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
                         end
-                        if dailyData.totalFish == 0 then
-                            imgui.TextDisabled("No fish caught today")
+                        
+                        -- Display items if any
+                        if #dailyData.itemList > 0 then
+                            imgui.Spacing()
+                            imgui.TextColored({1.0, 1.0, 0.0, 1.0}, "Items:")
+                            for _, entry in ipairs(dailyData.itemList) do
+                                imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
+                            end
+                        end
+                        
+                        if dailyData.totalFish == 0 and dailyData.totalItems == 0 then
+                            imgui.TextDisabled("Nothing caught today")
                         end
                     end
                     
@@ -1118,13 +1124,26 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     -- Fish Caught
                     if imgui.CollapsingHeader("Fish Caught", ImGuiTreeNodeFlags_DefaultOpen) then
-                        imgui.Text(string.format("Total: %d", lifetimeData.totalFish))
+                        imgui.Text(string.format("Total Fish: %d", lifetimeData.totalFish))
+                        imgui.Text(string.format("Total Items: %d", lifetimeData.totalItems))
                         imgui.Separator()
+                        
+                        -- Display fish
                         for _, entry in ipairs(lifetimeData.fishList) do
                             imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
                         end
-                        if lifetimeData.totalFish == 0 then
-                            imgui.TextDisabled("No fish caught yet")
+                        
+                        -- Display items if any
+                        if #lifetimeData.itemList > 0 then
+                            imgui.Spacing()
+                            imgui.TextColored({1.0, 1.0, 0.0, 1.0}, "Items:")
+                            for _, entry in ipairs(lifetimeData.itemList) do
+                                imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
+                            end
+                        end
+                        
+                        if lifetimeData.totalFish == 0 and lifetimeData.totalItems == 0 then
+                            imgui.TextDisabled("Nothing caught yet")
                         end
                     end
                     
