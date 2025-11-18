@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '1.25'
+addon.version   = '1.26'
 addon.desc      = 'Based off of Thorny\'s "Fishaid" plugin, with more insight and tracking'
 addon.link      = 'https://ashitaxi.com/'
 
@@ -48,6 +48,10 @@ local state = {
     
     -- Auto-close tracking
     CloseTime = nil,
+    
+    -- NEW: Fishing status tracking for auto-close
+    LastFishingStatus = nil,
+    FishingEndTime = nil,
 }
 
 -- Default window position
@@ -705,6 +709,8 @@ local function reset_fishing_session()
     state.CloseTime = nil
     state.Active = false
     state.IsItem = false
+    state.LastFishingStatus = nil
+    state.FishingEndTime = nil
     windowPosSet = false
     
     -- Mark stats as dirty so they'll be rebuilt next time
@@ -1282,6 +1288,39 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     end
 
     if not state.Active then return end
+
+    -- NEW: Check fishing status and set timer for auto-close
+    local entity = AshitaCore:GetMemoryManager():GetEntity()
+    local party = AshitaCore:GetMemoryManager():GetParty()
+    
+    if entity ~= nil and party ~= nil then
+        local player_index = party:GetMemberTargetIndex(0)
+        local currentStatus = entity:GetStatus(player_index)
+        
+        -- Track status changes
+        if state.LastFishingStatus == nil then
+            -- First time checking, just record current status
+            state.LastFishingStatus = currentStatus
+        elseif state.LastFishingStatus ~= 0 and currentStatus == 0 then
+            -- We were fishing (status was not 0) and now we're idle (status is 0)
+            -- Set the timer if not already set
+            if state.FishingEndTime == nil then
+                state.FishingEndTime = os.clock() + 1.0  -- 1 second delay
+            end
+        elseif currentStatus ~= 0 then
+            -- We're fishing again, clear the timer
+            state.FishingEndTime = nil
+        end
+        
+        -- Update last status
+        state.LastFishingStatus = currentStatus
+        
+        -- Check if it's time to auto-close due to fishing ending
+        if state.FishingEndTime ~= nil and os.clock() >= state.FishingEndTime then
+            reset_fishing_session()
+            return
+        end
+    end
 
     -- Check if it's time to auto-close after catching a fish
     if state.CloseTime and state.Fish then
