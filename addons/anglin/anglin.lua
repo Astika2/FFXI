@@ -1305,7 +1305,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             -- We were fishing (status was not 0) and now we're idle (status is 0)
             -- Set the timer if not already set
             if state.FishingEndTime == nil then
-                state.FishingEndTime = os.clock() + 1.0  -- 1 second delay
+                state.FishingEndTime = os.clock() + 0.0  -- Can add delay in seconds here (change 0.0 to whatever)
             end
         elseif currentStatus ~= 0 then
             -- We're fishing again, clear the timer
