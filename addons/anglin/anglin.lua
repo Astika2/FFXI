@@ -216,9 +216,10 @@ local fishingGuide = {
 	{ name = "Ryugu Titan", skill = 100, location = "Mhaura/Selbina Ferry", bait = "Meatball", rod = "Lu Shang's" },	
 	{ name = "Sandfish", skill = 50, location = "Rabao, E. Altepa Desert, Korroloka Tunnel, Kuftal Tunnel, W. Altepa Desert", bait = "Worm Lure", rod = "Composite" },	
 	{ name = "Sea Zombie", skill = 101, location = "Mhaura/Selbina Ferry (Pirates)", bait = "Meatball, Drill Calamary, Rotten Meat", rod = "Lu Shang's" },	
+	{ name = "Shall Shell", skill = 53, location = "Buburimu Peninsula, Bibiki Bay (Purgonorgo Isle)", bait = "Robber Rig, Rogue Rig", rod = "Composite" },	
 	{ name = "Shining Trout", skill = 37, location = "E. Ronfaure (River), La Theine Plateau", bait = "Fly Lure, Minnow", rod = "Halcyon" },	
 	{ name = "Silver Shark", skill = 76, location = "Mhaura/Selbina Ferry", bait = "Slice of Bluetail", rod = "Lu Shang's" },	
-	{ name = "Takitaro", skill = 100, location = "Davoi (Cascade), Misareaux Coast (Cascade Edellaine)", bait = "Frog Lure, Minnow", rod = "Lu Shang's" },	
+	{ name = "Takitaro", skill = 100, location = "Davoi (Cascade), Misareaux Coast (Cascade Edellaine)", bait = "Fly Lure", rod = "Lu Shang's" },	
 	{ name = "Tavnazian Goby", skill = 75, location = "Lufaise Meadows, Misareaux Coast (Cascade Edellaine)", bait = "Minnow, Sinking Minnow", rod = "Halcyon" },
 	{ name = "Three-Eyed Fish", skill = 81, location = "Qufim Island (Southeast Shore)", bait = "Minnow, Sliced Cod", rod = "Composite" },
 	{ name = "Tiger Cod", skill = 29, location = "Qufim Island (coastal), Sauromugue", bait = "Shrimp Lure, Sardine Ball", rod = "Composite" },
@@ -382,19 +383,28 @@ end
 
 -- Check if fish has been caught
 local function has_caught_fish(fishName)
-    -- Check exact match first
-    if data.state.lifetime.fishCaught[fishName] and data.state.lifetime.fishCaught[fishName] > 0 then
-        return true
-    end
+    --if not data.state or not data.state.lifetime or not data.state.lifetime.fishCaught then
+     --   print("DEBUG: data.state not initialized")
+     --   return false
+    --end
     
-    -- Try case-insensitive match
+    -- Debug: Print what we're looking for
+    --print(string.format("DEBUG: Looking for fish: '%s'", fishName))
+    
+    -- Try case-insensitive match for all fish
     local lowerFishName = fishName:lower()
+    local foundCount = 0
     for caughtFish, count in pairs(data.state.lifetime.fishCaught) do
-        if caughtFish:lower() == lowerFishName and count > 0 then
-            return true
+        --print(string.format("DEBUG: Checking '%s' (count: %d) against '%s'", caughtFish, count, fishName))
+        if caughtFish:lower() == lowerFishName then
+            --print(string.format("DEBUG: MATCH FOUND! %s == %s, count = %d", caughtFish:lower(), lowerFishName, count))
+            if count > 0 then
+                return true
+            end
         end
     end
     
+    --print(string.format("DEBUG: No match found for '%s'", fishName))
     return false
 end
 
@@ -489,6 +499,14 @@ local function reset_guide_filters()
     guideFilters.location = "All"
     guideFilters.skillRange = "All"
     guideFilters.showUncaught = true
+end
+
+-- Invalidate guide filter cache
+local function invalidate_guide_cache()
+    guideFilterCache.lastBait = ""
+    guideFilterCache.lastLocation = ""
+    guideFilterCache.lastSkillRange = ""
+    guideFilterCache.lastShowUncaught = not guideFilters.showUncaught  -- Force mismatch
 end
 
 -- Render dropdown combo for ImGui
@@ -814,6 +832,7 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
             state.Fish = fishName
             state.CatchCount = tonumber(count)
             data.record_fish(fishName, state.CatchCount, state.IsItem)
+			invalidate_guide_cache()
             
             if state.BaitBeforeCast and state.CurrentBaitType and state.CurrentBaitType.consumable then
                 data.record_bait_consumed(state.BaitBeforeCast, state.CatchCount)
@@ -830,6 +849,7 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
             state.Fish = fishName
             state.CatchCount = 1
             data.record_fish(fishName, 1, state.IsItem)
+			invalidate_guide_cache()
             
             if state.BaitBeforeCast and state.CurrentBaitType and state.CurrentBaitType.consumable then
                 data.record_bait_consumed(state.BaitBeforeCast, 1)
