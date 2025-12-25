@@ -1,7 +1,7 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '1.26'
-addon.desc      = 'Based off of Thorny\'s "Fishaid" plugin, with more insight and tracking'
+addon.version   = '1.27'
+addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking'
 addon.link      = 'https://ashitaxi.com/'
 
 require('common')
@@ -165,7 +165,7 @@ local fishingGuide = {
 	{ name = "Bastore Sardine", skill = 9, location = "Any coastal area", bait = "Lugworm, Sabiki Rig", rod = "Halcyon" },	
 	{ name = "Bhefhel Marlin", skill = 61, location = "Mhaura/Selbina Ferry", bait = "Slice of Bluetail", rod = "Composite" },	
 	{ name = "Bibiki Urchin", skill = 3, location = "Bibiki Bay (Docks), Manaclipper (Purgonorgo Isle)", bait = "Robber Rig, Slice of Bluetail", rod = "Lu Shang's" },	
-	{ name = "Bibikibo", skill = 8, location = "Bibiki Bay (Purgonorgo Isle), Manaclipper (Purgonorgo Isle)", bait = "Fly Lure", rod = "Lu Shang's" },	
+	{ name = "Bibikibo", skill = 8, location = "Bibiki Bay (Purgonorgo Isle), Manaclipper (Purgonorgo Isle)", bait = "No preference", rod = "Lu Shang's" },	
 	{ name = "Black Eel", skill = 47, location = "Zeruhn Mines (river)", bait = "Worm Lure, Trout Ball", rod = "Composite" },	
 	{ name = "Black Sole", skill = 96, location = "Qufim Island (Ice Pond), Port Jeuno", bait = "Sinking Minnow, Sliced Cod", rod = "Lu Shang's" },	
 	{ name = "Bladefish", skill = 71, location = "S. Gustaberg (sea), E./W. Sarutabaruta (sea)", bait = "Meatball, Slice of Bluetail", rod = "Composite" },	
