@@ -1233,11 +1233,12 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     if imgui.IsItemHovered() then
                         imgui.BeginTooltip()
+                        imgui.PushTextWrapPos(imgui.GetFontSize() * 28)
                         imgui.TextUnformatted(fish.name)
                         imgui.Separator()
                         imgui.TextUnformatted(string.format("Skill: %d", fish.skill))
-                        imgui.TextUnformatted(string.format("Location: %s", fish.location))
-                        imgui.TextUnformatted(string.format("Bait: %s", fish.bait))
+                        imgui.TextWrapped(string.format("Location: %s", fish.location))
+                        imgui.TextWrapped(string.format("Bait: %s", fish.bait))
                         imgui.TextUnformatted(string.format("Rod: %s", fish.rod))
                         if caught then
                             local catchCount = 0
@@ -1250,6 +1251,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                             imgui.Separator()
                             imgui.TextColored({0.41, 0.86, 0.49, 1.0}, string.format("Caught: %d times", catchCount))
                         end
+                        imgui.PopTextWrapPos()
                         imgui.EndTooltip()
                     end
                 end
