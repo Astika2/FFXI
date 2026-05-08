@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.0'
+addon.version   = '3.1'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1136,7 +1136,9 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
         
         imgui.SetNextWindowSize({ 800, 700 }, ImGuiCond_FirstUseEver)
-        if imgui.Begin("Fishing Guide", true, ImGuiWindowFlags_NoCollapse) then
+        local guideOpen = { showGuide }
+        if imgui.Begin("Fishing Guide", guideOpen, ImGuiWindowFlags_NoCollapse) then
+            showGuide = guideOpen[1]
             push_font()
             
             drawSection("Filters")
@@ -1295,7 +1297,9 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         imgui.PushStyleVar(ImGuiStyleVar_TabRounding, 4)
         
         imgui.SetNextWindowSize({ 550, 600 }, ImGuiCond_FirstUseEver)
-        if imgui.Begin("Fishing Statistics", true, ImGuiWindowFlags_NoCollapse) then
+        local statsOpen = { showStats }
+        if imgui.Begin("Fishing Statistics", statsOpen, ImGuiWindowFlags_NoCollapse) then
+            showStats = statsOpen[1]
             push_font()
             if imgui.BeginTabBar("StatsTabBar") then
                 if imgui.BeginTabItem("Daily") then
@@ -1458,7 +1462,9 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
         
         imgui.SetNextWindowSize({ 500, 450 }, ImGuiCond_FirstUseEver)
-        if imgui.Begin("Anglin Settings", true, ImGuiWindowFlags_NoCollapse) then
+        local settingsOpen = { showSettings }
+        if imgui.Begin("Anglin Settings", settingsOpen, ImGuiWindowFlags_NoCollapse) then
+            showSettings = settingsOpen[1]
             push_font()
             
             drawSection("Appearance")
@@ -1687,7 +1693,11 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     end
 
     imgui.SetNextWindowSize({ 340, 0 }, ImGuiCond_Always)
-    imgui.Begin("Anglin", true, bit.bor(ImGuiWindowFlags_NoCollapse, ImGuiWindowFlags_AlwaysAutoResize))
+    local anglinOpen = { true }
+    imgui.Begin("Anglin", anglinOpen, bit.bor(ImGuiWindowFlags_NoCollapse, ImGuiWindowFlags_AlwaysAutoResize))
+    if not anglinOpen[1] then
+        reset_fishing_session()
+    end
 
     push_font()
 
