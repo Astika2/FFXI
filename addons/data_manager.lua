@@ -57,12 +57,11 @@ end
 -- Helper: Get current JST date correctly
 -- ==============================
 local function get_jst_date()
-    -- Get UTC time
-    local utc_time = os.time(os.date("!*t"))
-    -- Add 9 hours for JST (32400 seconds)
-    local jst_time = utc_time + (9 * 3600)
-    -- Return date in JST
-    return os.date('%Y-%m-%d', jst_time)
+    -- os.time() with no args returns UTC epoch directly
+    -- Adding 9 hours (32400 seconds) gives JST — JST has no DST
+    local jst_time = os.time() + (9 * 3600)
+    -- "!" prefix forces UTC interpretation so local timezone/DST is never applied
+    return os.date('!%Y-%m-%d', jst_time)
 end
 
 -- ==============================
