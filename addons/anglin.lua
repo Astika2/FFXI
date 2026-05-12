@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.1'
+addon.version   = '3.2'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1312,7 +1312,18 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     local dailyData = statsCache.dailyData
                     
-                    drawColoredText("Date (JST):", data.state.daily.date or "Unknown", Colors.Primary)
+                    local jst_now = os.time() + (9 * 3600)
+                    local jst_t = os.date('!*t', jst_now)
+                    local jst_time_str = string.format('%02d:%02d:%02d', jst_t.hour, jst_t.min, jst_t.sec)
+                    local jst_date_str = data.state.daily.date or os.date('!%Y-%m-%d', jst_now)
+                    local secs_until_reset = 86400 - (jst_t.hour * 3600 + jst_t.min * 60 + jst_t.sec)
+                    if secs_until_reset == 86400 then secs_until_reset = 0 end
+                    local reset_h = math.floor(secs_until_reset / 3600)
+                    local reset_m = math.floor((secs_until_reset % 3600) / 60)
+                    local reset_s = secs_until_reset % 60
+                    local reset_str = string.format('%02d:%02d:%02d', reset_h, reset_m, reset_s)
+                    drawColoredText("JST Time:", jst_time_str .. '  ' .. jst_date_str, Colors.Primary)
+                    drawColoredText("Day Reset:", reset_str, Colors.Warning)
                     drawSection()
                     
                     if imgui.CollapsingHeader("Fish Caught", ImGuiTreeNodeFlags_DefaultOpen) then
