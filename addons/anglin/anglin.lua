@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.5'
+addon.version   = '3.52'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -226,6 +226,9 @@ local state = {
     -- Fishing status tracking for auto-close
     LastFishingStatus = nil,
     FishingEndTime = nil,
+
+    -- Monster name detection
+    AwaitingMonsterName = false,
 }
 
 -- Default window position
@@ -890,6 +893,29 @@ local function invalidate_guide_cache()
     guideFilterCache.lastShowUncaught = not guideFilters.showUncaught
 end
 
+local function clean_fish_name(fishname)
+    if not fishname then return "" end
+    local cleaned = fishname:gsub("[%z\1-\31\127]", "")
+    cleaned = cleaned:gsub("!%p?%d+", "")
+    cleaned = cleaned:gsub("!%d+", "")
+    cleaned = cleaned:gsub("^%s+", "")
+    cleaned = cleaned:gsub("%s+$", "")
+    cleaned = cleaned:gsub("[!?.]+$", "")
+    return cleaned
+end
+
+-- Strip leading quantity/article prefixes the game sometimes prepends to item names
+-- e.g. "pair of rusty leggings" -> "rusty leggings", "set of" -> stripped, etc.
+local function normalize_catch_name(name)
+    if not name then return "" end
+    local n = name:lower()
+    n = n:gsub("^pair of%s+", "")
+    n = n:gsub("^set of%s+", "")
+    n = n:gsub("^bunch of%s+", "")
+    n = n:gsub("^piece of%s+", "")
+    return n
+end
+
 local function get_filtered_guide_enhanced()
     local currentBait = guideFilters.bait
     local currentLocation = guideFilters.location
@@ -950,9 +976,9 @@ local function get_filtered_guide_enhanced()
         
         if passesFilter then
             local caught = false
-            local lowerFishName = fish.name:lower()
+            local lowerFishName = normalize_catch_name(fish.name)
             for caughtFish, _ in pairs(data.state.lifetime.fishCaught) do
-                if caughtFish:lower() == lowerFishName then
+                if normalize_catch_name(caughtFish) == lowerFishName then
                     caught = true
                     totalCaught = totalCaught + 1
                     break
@@ -975,17 +1001,6 @@ local function get_filtered_guide_enhanced()
     guideFilterCache.totalCaught = totalCaught
     
     return filteredList, totalFish, totalCaught
-end
-
-local function clean_fish_name(fishname)
-    if not fishname then return "" end
-    local cleaned = fishname:gsub("[%z\1-\31\127]", "")
-    cleaned = cleaned:gsub("!%p?%d+", "")
-    cleaned = cleaned:gsub("!%d+", "")
-    cleaned = cleaned:gsub("^%s+", "")
-    cleaned = cleaned:gsub("%s+$", "")
-    cleaned = cleaned:gsub("[!?.]+$", "")
-    return cleaned
 end
 
 local function parse_color(colorString)
@@ -1125,6 +1140,7 @@ local function reset_fishing_session()
     state.IsItem = false
     state.LastFishingStatus = nil
     state.FishingEndTime = nil
+    state.AwaitingMonsterName = false
     windowPosSet = false
     
     statsCache.dailyDirty = true
@@ -1242,6 +1258,8 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
     if playerName then
         local count, fishName = cleanMsg:match(playerName .. ' caught (%d+) (.+)')
         if count and fishName then
+            -- Strip "but cannot carry" suffix if inventory was full
+            fishName = fishName:match('^(.-)%s*,?%s*but cannot') or fishName
             fishName = clean_fish_name(fishName)
             state.Fish = fishName
             state.CatchCount = tonumber(count)
@@ -1257,21 +1275,53 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
             return
         end
 
-        local fishName = cleanMsg:match(playerName .. ' caught an? (.+)')
-        if fishName then
-            fishName = clean_fish_name(fishName)
-            state.Fish = fishName
-            state.CatchCount = 1
-            data.record_fish(fishName, 1, state.IsItem)
-            invalidate_guide_cache()
-            AnimState.catchFlash = 1.0
-            
-            if state.BaitBeforeCast and state.CurrentBaitType and state.CurrentBaitType.consumable then
-                data.record_bait_consumed(state.BaitBeforeCast, 1)
+        local singleCatch = cleanMsg:match(playerName .. ' caught an? (.+)')
+        if singleCatch then
+            -- Strip "but cannot carry" suffix if inventory was full
+            singleCatch = singleCatch:match('^(.-)%s*,?%s*but cannot') or singleCatch
+            local catchName = clean_fish_name(singleCatch)
+            -- Monster catch — don't record yet, wait for combat message with real name
+            if catchName:lower() == 'monster' then
+                state.Fish = 'Monster...'
+                state.CatchCount = 1
+                state.AwaitingMonsterName = true
+                AnimState.catchFlash = 1.0
+                if state.BaitBeforeCast and state.CurrentBaitType and state.CurrentBaitType.consumable then
+                    data.record_bait_consumed(state.BaitBeforeCast, 1)
+                end
+                state.CloseTime = os.clock() + 8.0
+            else
+                state.Fish = catchName
+                state.CatchCount = 1
+                data.record_fish(catchName, 1, state.IsItem)
+                invalidate_guide_cache()
+                AnimState.catchFlash = 1.0
+                if state.BaitBeforeCast and state.CurrentBaitType and state.CurrentBaitType.consumable then
+                    data.record_bait_consumed(state.BaitBeforeCast, 1)
+                end
+                state.CloseTime = os.clock() + 3.0
             end
-            
-            state.CloseTime = os.clock() + 3.0
             return
+        end
+    end
+
+    -- Monster name detection: parse first combat message after a monster catch
+    if state.AwaitingMonsterName and playerName then
+        local monsterName =
+            cleanMsg:match('^The (.-)%s+misses%s+' .. playerName) or
+            cleanMsg:match('^The (.-)%s+hits%s+' .. playerName) or
+            cleanMsg:match('^(.-)%s+uses%s') or
+            cleanMsg:match('^(.-)%s+readies%s')
+
+        if monsterName then
+            monsterName = monsterName:match('^%s*(.-)%s*$') -- trim
+            if monsterName ~= '' then
+                state.Fish = monsterName
+                state.AwaitingMonsterName = false
+                data.record_fish(monsterName, 1, false)
+                invalidate_guide_cache()
+                state.CloseTime = os.clock() + 3.0
+            end
         end
     end
 
@@ -1451,7 +1501,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         if caught then
                             local catchCount = 0
                             for caughtFish, count in pairs(data.state.lifetime.fishCaught) do
-                                if caughtFish:lower() == fish.name:lower() then
+                                if normalize_catch_name(caughtFish) == normalize_catch_name(fish.name) then
                                     catchCount = catchCount + count
                                 end
                             end
@@ -1494,9 +1544,9 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         end
                         if caught then
                             local catchCount = 0
-                            local lowerFishName = fish.name:lower()
+                            local normFishName = normalize_catch_name(fish.name)
                             for caughtFish, count in pairs(data.state.lifetime.fishCaught) do
-                                if caughtFish:lower() == lowerFishName then
+                                if normalize_catch_name(caughtFish) == normFishName then
                                     catchCount = catchCount + count
                                 end
                             end
