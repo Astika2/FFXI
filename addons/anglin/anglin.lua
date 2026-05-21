@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.52'
+addon.version   = '3.69'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -12,52 +12,31 @@ local data = require('data_manager')
 local json = require('json')
 local addon = { name = 'Anglin' }
 local playerName = nil
-
--- ================================
--- COLOR PALETTE
--- ================================
 local Colors = {
-    -- Primary theme colors
     Primary = 0xFFFFB974,        -- Soft Sky Blue
     PrimaryDark = 0xFFD69954,    -- Deeper Blue
     PrimaryLight = 0xFFFFD49F,   -- Light Sky Blue
-    
-    -- Accent colors
     Accent = 0xFFC0D37D,         -- Soft Teal
     Success = 0xFF7CDB69,        -- Soft Green
     Warning = 0xFF96E5FA,        -- Pale Yellow (very soft)
     Error = 0xFFA29AFF,          -- Soft Pink-Red
-    
-    -- Text colors
     TextPrimary = 0xFFFFFFFF,
     TextSecondary = 0xBFFFFFFF,
     TextMuted = 0x80FFFFFF,
-    
-    -- Background colors
     BgDark = 0x1A1A1A,
     BgMedium = 0x2D2D2D,
     BgLight = 0x3A3A3A,
-    
-    -- Hook/Feel colors
     Legendary = 0xFF7CE8FF,      -- Pale Gold
     Large = 0xFFFAC981,          -- Light Blue
     Small = 0xFFEFD966,          -- Cyan
     Item = 0xFFE7C7B4,           -- Soft Periwinkle
     Monster = 0xFFC88CFF,        -- Soft Pink
-    
-    -- Feel colors
     Good = 0xFF66CF51,           -- Soft Green
     Bad = 0xFF96E5FA,            -- Pale Yellow
     Terrible = 0xFFA29AFF,       -- Soft Coral
-
-    -- Guide caught/uncaught colors (user-configurable)
     CaughtColor = 0xFFFFFFFF,    -- White  (ABGR)
     UncaughtColor = 0xFF808080,  -- Gray   (ABGR)
 }
-
--- ================================
--- GUIDE COLOR OPTIONS (dropdown)
--- ================================
 local guideColorOptions = {
     { name = "White",       value = 0xFFFFFFFF, hex = "FFFFFFFF" },
     { name = "Gray",        value = 0xFF808080, hex = "808080FF" },
@@ -85,10 +64,6 @@ local function guideColorFromName(name)
     end
     return guideColorOptions[1]
 end
-
--- ================================
--- COLOR THEME PRESETS
--- ================================
 local ColorThemes = {
     ["Soft Blue"] = {
         Primary = 0xFFFFB974,
@@ -154,8 +129,6 @@ local ColorThemes = {
         Error = 0xFFA29AFF,
     }
 }
-
--- Apply a color theme
 local function applyColorTheme(themeName)
     local theme = ColorThemes[themeName]
     if theme then
@@ -168,10 +141,6 @@ local function applyColorTheme(themeName)
         Colors.Error = theme.Error
     end
 end
-
--- ================================
--- ANIMATION STATE
--- ================================
 local AnimState = {
     hookPulse = 0,
     catchFlash = 0,
@@ -209,8 +178,6 @@ local state = {
     CurrentBait = 'Unknown',
     CurrentBaitType = 'Unknown',
     CurrentRod = 'Unknown',
-    
-    -- Fishing session tracking
     Hook = nil,
     HookColor = nil,
     Feel = nil,
@@ -219,30 +186,17 @@ local state = {
     CatchCount = 1,
     BaitBeforeCast = nil,
     IsItem = false,
-    
-    -- Auto-close tracking
     CloseTime = nil,
-    
-    -- Fishing status tracking for auto-close
     LastFishingStatus = nil,
     FishingEndTime = nil,
-
-    -- Monster name detection
     AwaitingMonsterName = false,
 }
-
--- Default window position
 local windowPosX = 100
-
--- ================================
--- FONT HELPERS
--- ================================
 local function push_font()
     imgui.SetWindowFontScale(state.Settings and state.Settings.FontScale or 1.15)
 end
 
 local function pop_font()
-    -- SetWindowFontScale resets automatically when the window ends
 end
 local windowPosY = 100
 local windowPosSet = false
@@ -250,24 +204,18 @@ local showSettings = false
 local showStats = false
 local showGuide = false
 local activeStatsTab = "Daily"
-
--- Cache for stats display
 local statsCache = {
     dailyDirty = true,
     lifetimeDirty = true,
     dailyData = {},
     lifetimeData = {}
 }
-
--- Stats filtering state
 local statsFilters = {
     bait = "All",
     location = "All",
     skillRange = "All",
     showZeroCatch = true,
 }
-
--- Cache for filter options
 local filterOptionsCache = {
     baits = {},
     locations = {},
@@ -277,8 +225,6 @@ local filterOptionsCache = {
     },
     dirty = true
 }
-
--- Guide filtering state
 local guideFilters = {
     bait = "All",
     location = "All",
@@ -286,8 +232,6 @@ local guideFilters = {
     catchType = "All",
     showUncaught = true,
 }
-
--- Cache for guide filter options
 local guideFilterOptionsCache = {
     baits = {},
     locations = {},
@@ -298,8 +242,6 @@ local guideFilterOptionsCache = {
     catchTypes = { "All", "Fish", "Item", "Monster" },
     dirty = true
 }
-
--- Cache for filtered guide results
 local guideFilterCache = {
     lastBait = "",
     lastLocation = "",
@@ -309,13 +251,8 @@ local guideFilterCache = {
     totalFish = 0,
     totalCaught = 0
 }
-
--- Timer for daily reset check
 local lastDailyCheck = 0
-
--- Bait table
 local baitTypes = {
-    -- Consumable
     ['Crayfish Ball'] = { consumable = true },
     ['Drill Calamary'] = { consumable = true },
     ['Dwarf Pugil'] = { consumable = true },
@@ -335,7 +272,6 @@ local baitTypes = {
     ['Sliced Cod'] = { consumable = true },
     ['Sliced Sardine'] = { consumable = true },
     ['Trout Ball'] = { consumable = true },
-    -- Lures
     ['Fly Lure'] = { consumable = false },
     ['Frog Lure'] = { consumable = false },
     ['Lizard Lure'] = { consumable = false },
@@ -347,8 +283,6 @@ local baitTypes = {
     ['Sinking Minnow'] = { consumable = false },
     ['Worm Lure'] = { consumable = false },
 }
-
--- Fishing guide data
 local fishingGuide = {
 	{ name = "Ahtapot", skill = 90, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Ball of Crayfish Paste, Peeled Lobster, Shrimp Lure", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Alabaligi", skill = 37, location = "Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Minnow, Sinking Minnow", rod = "Halcyon Rod", type = "Fish" },
@@ -597,9 +531,6 @@ local fishingGuide = {
 	{ name = "Zazalda Clot", skill = 0, location = "Mount Zhayolm", bait = "Any", rod = "Any", type = "Monster" },
 	{ name = "Zazalda Jagil", skill = 0, location = "Mount Zhayolm", bait = "Any", rod = "Any", type = "Monster" },
 }
-
-
--- Hook and feel messages
 local hookMessages = {
     { message='Something caught the hook!!!', hook='Large Fish', color='|cFF00FF00|', logcolor=204, isItem=false },
     { message='Something caught the hook!', hook='Small Fish', color='|cFF00FF00|', logcolor=204, isItem=false },
@@ -617,10 +548,6 @@ local feelMessages = {
     { message='You\'re fairly sure you don\'t have enough skill to reel this one in.', feel='Very Low Skill', color='|cFFFFFF00|', logcolor=141 },
     { message='You\'re positive you don\'t have enough skill to reel this one in!', feel='Extremely Low Skill', color='|cFFFF0000|', logcolor=167 },
 }
-
--- ================================
--- MODERN UI HELPER FUNCTIONS
--- ================================
 
 local function getBackgroundColor(alpha)
     return bit.bor(
@@ -672,13 +599,8 @@ local function drawSection(title)
         imgui.Spacing()
     end
 end
-
--- Parse hex color string to ABGR integer
 local function parseHexColor(hexString)
-    -- Remove any # or 0x prefix
     hexString = hexString:gsub("^#", ""):gsub("^0x", "")
-    
-    -- Ensure it's 8 characters (RRGGBBAA format from user)
     if #hexString ~= 8 then
         return nil
     end
@@ -691,8 +613,6 @@ local function parseHexColor(hexString)
     if not (r and g and b and a) then
         return nil
     end
-    
-    -- Convert RGBA to ABGR for ImGui
     return bit.bor(
         bit.lshift(a, 24),
         bit.lshift(b, 16),
@@ -700,8 +620,6 @@ local function parseHexColor(hexString)
         r
     )
 end
-
--- Convert ABGR integer to hex string (RRGGBBAA format for user)
 local function colorToHexString(color)
     local a = bit.band(bit.rshift(color, 24), 0xFF)
     local b = bit.band(bit.rshift(color, 16), 0xFF)
@@ -710,49 +628,28 @@ local function colorToHexString(color)
     
     return string.format("%02X%02X%02X%02X", r, g, b, a)
 end
-
--- Override game colors with our modern palette
 local function getModernColor(originalColor)
-    -- Convert the original color to our modern equivalents
     if not originalColor then return Colors.TextPrimary end
-    
-    -- Check for specific game colors and map to modern palette
     local r = bit.rshift(bit.band(originalColor, 0xFF0000), 16)
     local g = bit.rshift(bit.band(originalColor, 0x00FF00), 8)
     local b = bit.band(originalColor, 0x0000FF)
-    
-    -- Green (good) -> Soft Green
     if g > 200 and r < 100 and b < 100 then
         return Colors.Good
     end
-    
-    -- Red (bad/terrible) -> Soft Red
     if r > 200 and g < 100 and b < 100 then
         return Colors.Terrible
     end
-    
-    -- Yellow/Orange (warning) -> Soft Yellow
     if r > 200 and g > 200 and b < 100 then
         return Colors.Warning
     end
-    
-    -- Purple/Magenta (epic) -> Soft Purple
     if r > 200 and b > 200 then
         return Colors.Large
     end
-    
-    -- Cyan (skill) -> Soft Cyan
     if g > 200 and b > 200 and r < 100 then
         return Colors.Accent
     end
-    
-    -- Default
     return originalColor
 end
-
--- ================================
--- ORIGINAL HELPER FUNCTIONS
--- ================================
 
 local function build_stats_cache(sourceData, cacheData)
     cacheData.totalFish = 0
@@ -903,9 +800,6 @@ local function clean_fish_name(fishname)
     cleaned = cleaned:gsub("[!?.]+$", "")
     return cleaned
 end
-
--- Strip leading quantity/article prefixes the game sometimes prepends to item names
--- e.g. "pair of rusty leggings" -> "rusty leggings", "set of" -> stripped, etc.
 local function normalize_catch_name(name)
     if not name then return "" end
     local n = name:lower()
@@ -1032,6 +926,14 @@ local function update_player_name()
     end
 end
 
+local function get_fishing_skill()
+    local ok, result = pcall(function()
+        return AshitaCore:GetMemoryManager():GetPlayer():GetCraftSkill(0):GetSkill()
+    end)
+    if ok and result then return result end
+    return nil
+end
+
 local function detect_bait()
     local inv = AshitaCore:GetMemoryManager():GetInventory()
     if not inv then
@@ -1147,27 +1049,18 @@ local function reset_fishing_session()
     statsCache.lifetimeDirty = true
 end
 
--- ================================
--- EVENT HANDLERS
--- ================================
-
 ashita.events.register('load', 'load_cb', function()
     update_player_name()
     state.Settings = settings.load(defaults)
     state.Font = fonts.new(state.Settings.Font)
-
-    -- Ensure guide color keys exist (may be absent in older saved files)
     if state.Settings.CaughtColor == nil then
         state.Settings.CaughtColor = "FFFFFFFF"
     end
     if state.Settings.UncaughtColor == nil then
         state.Settings.UncaughtColor = "808080FF"
     end
-    
-    -- Apply saved color theme
     if state.Settings.ColorTheme then
         if state.Settings.ColorTheme == "Custom" and state.Settings.CustomColors then
-            -- Load custom colors
             local primary = parseHexColor(state.Settings.CustomColors.Primary)
             local primaryDark = parseHexColor(state.Settings.CustomColors.PrimaryDark)
             local primaryLight = parseHexColor(state.Settings.CustomColors.PrimaryLight)
@@ -1179,8 +1072,6 @@ ashita.events.register('load', 'load_cb', function()
             applyColorTheme(state.Settings.ColorTheme)
         end
     end
-
-    -- Load saved guide caught/uncaught colors
     if state.Settings.CaughtColor then
         for _, c in ipairs(guideColorOptions) do
             if c.hex:upper() == state.Settings.CaughtColor:upper() then
@@ -1258,7 +1149,6 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
     if playerName then
         local count, fishName = cleanMsg:match(playerName .. ' caught (%d+) (.+)')
         if count and fishName then
-            -- Strip "but cannot carry" suffix if inventory was full
             fishName = fishName:match('^(.-)%s*,?%s*but cannot') or fishName
             fishName = clean_fish_name(fishName)
             state.Fish = fishName
@@ -1277,10 +1167,8 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
 
         local singleCatch = cleanMsg:match(playerName .. ' caught an? (.+)')
         if singleCatch then
-            -- Strip "but cannot carry" suffix if inventory was full
             singleCatch = singleCatch:match('^(.-)%s*,?%s*but cannot') or singleCatch
             local catchName = clean_fish_name(singleCatch)
-            -- Monster catch — don't record yet, wait for combat message with real name
             if catchName:lower() == 'monster' then
                 state.Fish = 'Monster...'
                 state.CatchCount = 1
@@ -1304,8 +1192,6 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
             return
         end
     end
-
-    -- Monster name detection: parse first combat message after a monster catch
     if state.AwaitingMonsterName and playerName then
         local monsterName =
             cleanMsg:match('^The (.-)%s+misses%s+' .. playerName) or
@@ -1384,18 +1270,11 @@ ashita.events.register('command', 'anglin_command', function(e)
     end
 end)
 
--- ================================
--- MODERN RENDER FUNCTION
--- ================================
-
 ashita.events.register('d3d_present', 'anglin_render', function()
-    -- Update animations
     AnimState.hookPulse = (AnimState.hookPulse + 0.05) % (math.pi * 2)
     if AnimState.catchFlash > 0 then
         AnimState.catchFlash = math.max(0, AnimState.catchFlash - 0.02)
     end
-    
-    -- Fishing Guide window (modernized)
     if showGuide then
         build_guide_filter_options()
         
@@ -1412,6 +1291,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         if imgui.Begin("Fishing Guide", guideOpen, ImGuiWindowFlags_NoCollapse) then
             showGuide = guideOpen[1]
             push_font()
+
+            if imgui.BeginTabBar("GuideTabBar") then
+
+                if imgui.BeginTabItem("Guide") then
             
             drawSection("Filters")
             
@@ -1473,8 +1356,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             local filteredList, totalFish, totalCaught = get_filtered_guide_enhanced()
             
             imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
-            imgui.TextUnformatted(string.format("Showing %d/%d | Total Caught: %d", 
-                #filteredList, totalFish, totalCaught))
+            local skillVal = get_fishing_skill()
+            local skillStr = skillVal and string.format(" | Skill: %d", skillVal) or ""
+            imgui.TextUnformatted(string.format("Showing %d/%d | Total Caught: %d%s",
+                #filteredList, totalFish, totalCaught, skillStr))
             imgui.PopStyleColor()
             
             imgui.Spacing()
@@ -1487,8 +1372,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     local skillStr = fish.skill > 0 and string.format(" (Skill: %d)", fish.skill) or ""
                     local typeTag = fish.type == "Monster" and " [MOB]" or (fish.type == "Item" and " [ITEM]" or "")
                     local displayName = fish.name .. typeTag .. skillStr
-
-                    -- Always push exactly one color so we can always pop once below
                     if not caught then
                         imgui.PushStyleColor(ImGuiCol_Text, Colors.UncaughtColor)
                     else
@@ -1527,8 +1410,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         imgui.Unindent()
                         imgui.Spacing()
                     end
-                    
-                    -- Always pop the one color we always pushed above
                     imgui.PopStyleColor()
                     
                     if imgui.IsItemHovered() then
@@ -1566,7 +1447,105 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 
                 imgui.EndChild()
             end
-            
+
+                    imgui.EndTabItem()
+                end -- Guide tab
+
+                if imgui.BeginTabItem("Skillups") then
+                    local playerSkill = get_fishing_skill()
+
+                    if not playerSkill then
+                        imgui.TextColored({1,0.4,0.4,1}, "Skill data unavailable.")
+                    else
+                        imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
+                        imgui.TextUnformatted(string.format("Your Fishing Skill: %d", playerSkill))
+                        imgui.PopStyleColor()
+                        imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                        imgui.TextWrapped("Best targets are fish with skill requirements 5-11 above yours.")
+                        imgui.PopStyleColor()
+                        imgui.Spacing()
+                        imgui.Separator()
+                        imgui.Spacing()
+
+                        local skillMin = playerSkill + 5
+                        local skillMax = playerSkill + 11
+                        local suggestions = {}
+                        for _, fish in ipairs(fishingGuide) do
+                            if fish.skill > 0 and fish.type == "Fish" and
+                               fish.skill >= skillMin and fish.skill <= skillMax then
+                                local normName = normalize_catch_name(fish.name)
+                                local caught = false
+                                for caughtFish, _ in pairs(data.state.lifetime.fishCaught) do
+                                    if normalize_catch_name(caughtFish) == normName then
+                                        caught = true
+                                        break
+                                    end
+                                end
+                                table.insert(suggestions, {
+                                    fish = fish,
+                                    caught = caught,
+                                    gap = fish.skill - playerSkill,
+                                })
+                            end
+                        end
+                        table.sort(suggestions, function(a, b)
+                            return a.fish.skill < b.fish.skill
+                        end)
+
+                        if #suggestions == 0 then
+                            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                            imgui.TextWrapped(string.format(
+                                "No fish found with skill %d-%d in the database.",
+                                skillMin, skillMax))
+                            imgui.PopStyleColor()
+                        else
+                            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+                            imgui.TextUnformatted(string.format(
+                                "Ideal range: Skill %d-%d  (%d targets)",
+                                skillMin, skillMax, #suggestions))
+                            imgui.PopStyleColor()
+                            imgui.Spacing()
+
+                            if imgui.BeginChild("SkillupList", {0, -40}, false) then
+                                for _, entry in ipairs(suggestions) do
+                                    local fish = entry.fish
+                                    local col = entry.caught and Colors.CaughtColor or Colors.UncaughtColor
+                                    imgui.PushStyleColor(ImGuiCol_Text, col)
+                                    imgui.TextUnformatted(string.format(
+                                        "%-30s  Skill: %d  (+%d)",
+                                        fish.name, fish.skill, entry.gap))
+                                    imgui.PopStyleColor()
+
+                                    if imgui.IsItemHovered() then
+                                        imgui.BeginTooltip()
+                                        imgui.PushTextWrapPos(300)
+                                        imgui.PushStyleColor(ImGuiCol_Text, Colors.Primary)
+                                        imgui.TextUnformatted(fish.name)
+                                        imgui.PopStyleColor()
+                                        imgui.Separator()
+                                        imgui.TextUnformatted(string.format("Skill Required: %d  (+%d from yours)", fish.skill, entry.gap))
+                                        imgui.TextWrapped(string.format("Location: %s", fish.location))
+                                        imgui.TextWrapped(string.format("Bait/Lure: %s", fish.bait))
+                                        imgui.TextWrapped(string.format("Rod: %s", fish.rod))
+                                        if entry.caught then
+                                            imgui.PushStyleColor(ImGuiCol_Text, Colors.CaughtColor)
+                                            imgui.TextUnformatted("[Previously Caught]")
+                                            imgui.PopStyleColor()
+                                        end
+                                        imgui.PopTextWrapPos()
+                                        imgui.EndTooltip()
+                                    end
+                                end
+                                imgui.EndChild()
+                            end
+                        end
+                    end
+                    imgui.EndTabItem()
+                end -- Skillups tab
+
+                imgui.EndTabBar()
+            end -- TabBar
+
             imgui.Spacing()
             if modernButton("Close", -1, 30) then
                 showGuide = false
@@ -1581,8 +1560,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         imgui.PopStyleVar(3)
         imgui.PopStyleColor(4)
     end
-    
-    -- Stats window (modernized)
     if showStats then
         imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(state.Settings.WindowTransparency))
         imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
@@ -1624,6 +1601,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     local reset_str = string.format('%02d:%02d:%02d', reset_h, reset_m, reset_s)
                     drawColoredText("JST Time:", jst_time_str .. '  ' .. jst_date_str, Colors.Primary)
                     drawColoredText("Day Reset:", reset_str, Colors.Warning)
+                    local skillVal = get_fishing_skill()
+                    if skillVal then
+                        drawColoredText("Fishing Skill:", string.format("%d", skillVal), Colors.Accent)
+                    end
                     drawSection()
                     
                     if imgui.CollapsingHeader("Fish Caught", ImGuiTreeNodeFlags_DefaultOpen) then
@@ -1689,7 +1670,13 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     end
                     
                     local lifetimeData = statsCache.lifetimeData
-                    
+
+                    local skillVal = get_fishing_skill()
+                    if skillVal then
+                        drawColoredText("Fishing Skill:", string.format("%d", skillVal), Colors.Accent)
+                        drawSection()
+                    end
+
                     if imgui.CollapsingHeader("Fish Caught", ImGuiTreeNodeFlags_DefaultOpen) then
                         drawColoredText("Total Fish:", tostring(lifetimeData.totalFish), Colors.Success)
                         
@@ -1743,7 +1730,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     imgui.EndTabItem()
                 end
-                
+
                 imgui.EndTabBar()
             end
             
@@ -1761,8 +1748,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         imgui.PopStyleVar(4)
         imgui.PopStyleColor(7)
     end
-    
--- Settings window (modernized with color themes)
     if showSettings then
         imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(0.95))
         imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
@@ -1779,8 +1764,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             push_font()
             
             drawSection("Appearance")
-            
-            -- Transparency Slider
             imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
             imgui.TextUnformatted("Window Transparency")
             imgui.PopStyleColor()
@@ -1824,8 +1807,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             drawColoredText("Current:", string.format("%.2f", state.Settings.FontScale or 1.15), Colors.Primary)
             
             drawSection("Color Theme")
-            
-            -- Theme selector
             imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
             imgui.TextUnformatted("Select Theme:")
             imgui.PopStyleColor()
@@ -1851,8 +1832,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 imgui.EndCombo()
             end
             imgui.PopItemWidth()
-            
-            -- Custom color inputs (only show if Custom is selected)
             if currentTheme == "Custom" then
                 imgui.Spacing()
                 imgui.Spacing()
@@ -1863,8 +1842,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 imgui.PopStyleColor()
                 
                 imgui.Spacing()
-                
-                -- Ensure CustomColors exists
                 if not state.Settings.CustomColors then
                     state.Settings.CustomColors = T{
                         Primary = colorToHexString(Colors.Primary),
@@ -1872,8 +1849,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         PrimaryLight = colorToHexString(Colors.PrimaryLight),
                     }
                 end
-                
-                -- Primary Color
                 imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
                 imgui.TextUnformatted("Primary Color:")
                 imgui.PopStyleColor()
@@ -1891,8 +1866,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     end
                 end
                 imgui.PopItemWidth()
-                
-                -- Primary Dark Color
                 imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
                 imgui.TextUnformatted("Primary Dark:")
                 imgui.PopStyleColor()
@@ -1910,8 +1883,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     end
                 end
                 imgui.PopItemWidth()
-                
-                -- Primary Light Color
                 imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
                 imgui.TextUnformatted("Primary Light:")
                 imgui.PopStyleColor()
@@ -1938,11 +1909,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             
             imgui.Spacing()
             imgui.Spacing()
-            
-            -- Guide Caught / Uncaught colors
             drawSection("Guide Colors")
-
-            -- Caught color dropdown
             imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
             imgui.TextUnformatted("\"Caught\" Color:")
             imgui.PopStyleColor()
@@ -1977,8 +1944,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             end
 
             imgui.Spacing()
-
-            -- Uncaught color dropdown
             imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
             imgui.TextUnformatted("\"Uncaught\" Color:")
             imgui.PopStyleColor()
@@ -2010,8 +1975,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             end
 
             imgui.Spacing()
-
-            -- Reset to defaults button
             if modernButton("Reset Guide Colors", 160, 26) then
                 Colors.CaughtColor   = 0xFFFFFFFF
                 Colors.UncaughtColor = 0xFF808080
@@ -2038,8 +2001,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
 	end
 
     if not state.Active then return end
-
-    -- Fishing status check
     local entity = AshitaCore:GetMemoryManager():GetEntity()
     local party = AshitaCore:GetMemoryManager():GetParty()
     
@@ -2072,8 +2033,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             return
         end
     end
-
-    -- Main fishing status window (MODERNIZED!)
     imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(state.Settings.WindowTransparency))
     imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
     imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
@@ -2095,8 +2054,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     end
 
     push_font()
-
-    -- Hook status with animation
     if state.Hook then
         local pulseAlpha = 0.7 + math.sin(AnimState.hookPulse) * 0.3
         imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
@@ -2123,8 +2080,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     else
         drawColoredText("Hook:", "Waiting...", Colors.TextMuted)
     end
-    
-    -- Feel status
     if state.Feel then
         imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
         imgui.TextUnformatted("Feel:")
@@ -2141,8 +2096,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     else
         drawColoredText("Feel:", "Waiting...", Colors.TextMuted)
     end
-    
-    -- Catch display with flash effect
     if state.Fish then
         local displayFish = clean_fish_name(state.Fish)
         local catchText = displayFish
@@ -2166,22 +2119,16 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     else
         drawColoredText("Caught:", "Fishing...", Colors.TextMuted)
     end
-    
-    -- Divider
     imgui.Spacing()
     imgui.PushStyleColor(ImGuiCol_Separator, Colors.Primary)
     imgui.Separator()
     imgui.PopStyleColor()
     imgui.Spacing()
-    
-    -- Equipment info
     drawColoredText("Rod:", state.CurrentRod or "None", Colors.TextPrimary)
     drawColoredText("Bait:", state.CurrentBait or "None", Colors.TextPrimary)
     
     imgui.Spacing()
     imgui.Spacing()
-
-    -- Close button
     if modernButton("Close", -1, 30) then
         reset_fishing_session()
     end
@@ -2195,8 +2142,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     imgui.PopStyleVar(3)
     imgui.PopStyleColor(4)
 end)
-
--- Periodic check for daily reset
 ashita.events.register('d3d_present', 'anglin_daily_check', function()
     local currentTime = os.time()
     if currentTime - lastDailyCheck >= 1 then
