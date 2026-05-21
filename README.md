@@ -6,7 +6,7 @@ Available commands:
 
 /anglin guide - this will show the fish guide with info on where to find fish and how to catch<br>
 /anglin stats - this will show a window that you can view your daily and lifetime stats (daily stats will reset at 12am Japan time)<br>
-/anglin settings - this will display the settings window, for now it's only to adjust the transparency of the minigame window.<br>
+/anglin settings - this will display the settings window, there's a few things you can change in there now to suit you.<br>
 
 Installation: Extract the latest release into your /addons folder<br>
 Please also enable ImGuiStyle in the HorizonXI launcher, otherwise this will not look right!!!<br>
