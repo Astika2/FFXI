@@ -9,6 +9,7 @@ Available commands:
 /anglin settings - this will display the settings window, for now it's only to adjust the transparency of the minigame window.<br>
 
 Installation: Extract the latest release into your /addons folder<br>
+Please also enable ImGuiStyle in the HorizonXI launcher, otherwise this will not look right!!!<br>
 To Update: Extract the latest release into your /addons folder and OVERWRITE the old files. DO NOT DELETE YOUR EXISTING "anglin" FOLDER OR YOU WILL LOSE YOUR STATISTICS.<br>
 
 K thanks bye!
