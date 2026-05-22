@@ -10,7 +10,7 @@ Available commands:
 
 Installation: Extract the latest release into your /addons folder<br>
 Please also enable ImGuiStyle in the HorizonXI launcher, otherwise this will not look right!!!<br>
-To Update - VERSION 3.9.5 and above: Run "/anglin update" from within HorizonXI. This will pull the newest version if it is later than the version you have installed. "/addon reload anglin" once this is done will load the latest.
+To Update - VERSION 3.9.5 and above: Run "/anglin update" from within HorizonXI. This will pull the newest version if it is later than the version you have installed. "/addon reload anglin" once this is done will load the latest.<br>
           - VERSIONS below 3.9.5: Extract the latest release into your /addons folder and OVERWRITE the old files. DO NOT DELETE YOUR EXISTING "anglin" FOLDER OR YOU WILL LOSE YOUR STATISTICS. The latest version will copy these files to the /config directory so that they are safer moving forward, but you do not need to delete them (once they are migrated to config, you can if you want)<br>
 
 K thanks bye!
