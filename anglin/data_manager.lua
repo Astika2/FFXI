@@ -2,7 +2,8 @@
 -- data_manager.lua for Anglin Addon
 ---------------------------------------------------------------------------------------------------
 
-local json = require('json') -- make sure you have a JSON library available
+local json     = require('json')
+local settings = require('settings')
 local AshitaCore = AshitaCore -- available in HorizonXI Lua
 
 local data = {}
@@ -40,8 +41,22 @@ local currentPlayerName = nil
 -- ==============================
 -- Paths (dynamic based on player name)
 -- ==============================
-local addonPath = string.format('%s\\addons\\anglin\\data\\', AshitaCore:GetInstallPath())
-local dailyFile = nil
+-- New location: same folder as the player's settings.lua
+--   <AshitaPath>\config\addons\anglin\<CharName>_<ServerID>\
+-- Old location (pre-migration):
+--   <AshitaPath>\addons\anglin\data\
+local function get_new_data_path()
+    -- settings.settings_path() returns the exact folder the settings.lua lives in,
+    -- e.g. <AshitaPath>\config\addons\anglin\Astika_22052\
+    -- It already has a trailing backslash.
+    return settings.settings_path()
+end
+
+local function get_old_data_path()
+    return string.format('%s\\addons\\anglin\\data\\', AshitaCore:GetInstallPath())
+end
+
+local dailyFile    = nil
 local lifetimeFile = nil
 
 -- ==============================
@@ -79,16 +94,16 @@ end
 -- Creates it if needed; prints a chatlog error and returns false if it cannot be created.
 -- ==============================
 local function check_file_permissions()
-    local dir = addonPath:gsub('\\$', '')
+    local dir = get_new_data_path():gsub('\\$', '')
     -- Attempt to create the directory; no-op on Windows if it already exists.
     os.execute(string.format('mkdir "%s" 2>nul', dir))
     -- Verify writability by probing with a temp file.
-    local testPath = addonPath .. '.write_test'
+    local testPath = get_new_data_path() .. '.write_test'
     local f, err = io.open(testPath, 'w')
     if not f then
         print_error(string.format(
             'Cannot create data folder - stats will not be saved. (path: %s, error: %s)',
-            addonPath, tostring(err)
+            get_new_data_path(), tostring(err)
         ))
         return false
     end
@@ -98,17 +113,77 @@ local function check_file_permissions()
 end
 
 -- ==============================
--- Helper: Update file paths based on player name
+-- Helper: Update file paths based on player name, with migration from old location
 -- ==============================
 local function update_file_paths(playerName)
+    local newPath = get_new_data_path()
+    local oldPath = get_old_data_path()
+
+    -- New-location filenames (flat, in the same folder as settings.lua)
     if not playerName or playerName == '' then
-        dailyFile = addonPath .. 'daily.json'
-        lifetimeFile = addonPath .. 'lifetime.json'
+        dailyFile    = newPath .. 'daily.json'
+        lifetimeFile = newPath .. 'lifetime.json'
     else
-        dailyFile = addonPath .. playerName .. '-daily.json'
-        lifetimeFile = addonPath .. playerName .. '-lifetime.json'
+        dailyFile    = newPath .. playerName .. '-daily.json'
+        lifetimeFile = newPath .. playerName .. '-lifetime.json'
     end
-    check_file_permissions()
+
+    -- Old-location filenames (original flat folder under addons\anglin\data\)
+    local oldDailyFile, oldLifetimeFile
+    if not playerName or playerName == '' then
+        oldDailyFile    = oldPath .. 'daily.json'
+        oldLifetimeFile = oldPath .. 'lifetime.json'
+    else
+        oldDailyFile    = oldPath .. playerName .. '-daily.json'
+        oldLifetimeFile = oldPath .. playerName .. '-lifetime.json'
+    end
+
+    -- Check whether data already exists in the new location
+    local newDailyExists    = io.open(dailyFile, 'r')
+    local newLifetimeExists = io.open(lifetimeFile, 'r')
+    if newDailyExists    then newDailyExists:close()    end
+    if newLifetimeExists then newLifetimeExists:close() end
+
+    local hasNewData = (newDailyExists ~= nil) or (newLifetimeExists ~= nil)
+
+    if not hasNewData then
+        -- Check old location
+        local oldDailyExists    = io.open(oldDailyFile, 'r')
+        local oldLifetimeExists = io.open(oldLifetimeFile, 'r')
+        if oldDailyExists    then oldDailyExists:close()    end
+        if oldLifetimeExists then oldLifetimeExists:close() end
+
+        local hasOldData = (oldDailyExists ~= nil) or (oldLifetimeExists ~= nil)
+
+        if hasOldData then
+            -- Ensure the new directory exists before copying
+            check_file_permissions()
+
+            -- Copy each file that exists
+            local function copy_file(src, dst)
+                local f = io.open(src, 'rb')
+                if not f then return end
+                local content = f:read('*a')
+                f:close()
+                local g = io.open(dst, 'wb')
+                if g then
+                    g:write(content)
+                    g:close()
+                end
+            end
+
+            if oldDailyExists    ~= nil then copy_file(oldDailyFile,    dailyFile)    end
+            if oldLifetimeExists ~= nil then copy_file(oldLifetimeFile, lifetimeFile) end
+
+            AshitaCore:GetChatManager():QueueCommand(1,
+                '/echo [Anglin] Data files migrated to config\\addons\\anglin\\' ..
+                (playerName or 'data') .. '\\'
+            )
+        else
+            -- No data anywhere — just ensure the new directory exists (fresh start)
+            check_file_permissions()
+        end
+    end
 end
 
 -- ==============================

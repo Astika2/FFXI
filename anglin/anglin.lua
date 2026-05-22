@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.8'
+addon.version   = '3.9'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -171,6 +171,8 @@ local defaults = T{
     CaughtColor = "FFFFFFFF",   -- RRGGBBAA hex for guide "Caught" label (white)
     UncaughtColor = "808080FF", -- RRGGBBAA hex for guide "Uncaught" label (gray)
     SilentToggle = false,       -- suppress "X window toggled." chat messages
+    FishingWindowX = 100,       -- saved position of the fishing popup window
+    FishingWindowY = 100,
 }
 
 local state = {
@@ -1116,6 +1118,8 @@ ashita.events.register('load', 'load_cb', function()
     update_player_name()
     state.Settings = settings.load(defaults)
     state.Font = fonts.new(state.Settings.Font)
+    windowPosX = state.Settings.FishingWindowX or 100
+    windowPosY = state.Settings.FishingWindowY or 100
     if state.Settings.CaughtColor == nil then
         state.Settings.CaughtColor = "FFFFFFFF"
     end
@@ -2095,6 +2099,26 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.Spacing()
             imgui.Spacing()
 
+            -- Fishing window position
+            drawSection("Fishing Window")
+            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+            imgui.TextUnformatted("The fishing popup window can be dragged freely while it is open.")
+            imgui.TextUnformatted(string.format("Saved position: X=%.0f, Y=%.0f",
+                state.Settings.FishingWindowX or 100, state.Settings.FishingWindowY or 100))
+            imgui.PopStyleColor()
+            imgui.Spacing()
+            if modernButton("Reset Window Position", 180, 26) then
+                windowPosX = 100
+                windowPosY = 100
+                state.Settings.FishingWindowX = 100
+                state.Settings.FishingWindowY = 100
+                windowPosSet = false
+                settings.save()
+            end
+
+            imgui.Spacing()
+            imgui.Spacing()
+
             -- Silent toggle option
             imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
             imgui.TextUnformatted("Chat Messages:")
@@ -2126,37 +2150,40 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         imgui.PopStyleColor(4)
 	end
 
-    if not state.Active then return end
+    local previewMode = showSettings and not state.Active
+    if not state.Active and not previewMode then return end
     local entity = AshitaCore:GetMemoryManager():GetEntity()
     local party = AshitaCore:GetMemoryManager():GetParty()
     
-    if entity ~= nil and party ~= nil then
-        local player_index = party:GetMemberTargetIndex(0)
-        local currentStatus = entity:GetStatus(player_index)
-        
-        if state.LastFishingStatus == nil then
-            state.LastFishingStatus = currentStatus
-        elseif state.LastFishingStatus ~= 0 and currentStatus == 0 then
-            if state.FishingEndTime == nil then
-                state.FishingEndTime = os.clock() + 0.0
+    if not previewMode then
+        if entity ~= nil and party ~= nil then
+            local player_index = party:GetMemberTargetIndex(0)
+            local currentStatus = entity:GetStatus(player_index)
+            
+            if state.LastFishingStatus == nil then
+                state.LastFishingStatus = currentStatus
+            elseif state.LastFishingStatus ~= 0 and currentStatus == 0 then
+                if state.FishingEndTime == nil then
+                    state.FishingEndTime = os.clock() + 0.0
+                end
+            elseif currentStatus ~= 0 then
+                state.FishingEndTime = nil
             end
-        elseif currentStatus ~= 0 then
-            state.FishingEndTime = nil
+            
+            state.LastFishingStatus = currentStatus
+            
+            if state.FishingEndTime ~= nil and os.clock() >= state.FishingEndTime then
+                reset_fishing_session()
+                return
+            end
         end
-        
-        state.LastFishingStatus = currentStatus
-        
-        if state.FishingEndTime ~= nil and os.clock() >= state.FishingEndTime then
-            reset_fishing_session()
-            return
-        end
-    end
 
-    if state.CloseTime and state.Fish then
-        local currentTime = os.clock()
-        if currentTime >= state.CloseTime then
-            reset_fishing_session()
-            return
+        if state.CloseTime and state.Fish then
+            local currentTime = os.clock()
+            if currentTime >= state.CloseTime then
+                reset_fishing_session()
+                return
+            end
         end
     end
     imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(state.Settings.WindowTransparency))
@@ -2180,6 +2207,12 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     end
 
     push_font()
+    if previewMode then
+        imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+        imgui.TextUnformatted("[ PREVIEW - drag to reposition ]")
+        imgui.PopStyleColor()
+        imgui.Spacing()
+    end
     if state.Hook then
         local pulseAlpha = 0.7 + math.sin(AnimState.hookPulse) * 0.3
         imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
@@ -2255,13 +2288,24 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     
     imgui.Spacing()
     imgui.Spacing()
-    if modernButton("Close", -1, 30) then
-        reset_fishing_session()
+    if previewMode then
+        if modernButton("Close Settings", -1, 30) then
+            showSettings = false
+        end
+    else
+        if modernButton("Close", -1, 30) then
+            reset_fishing_session()
+        end
     end
 
     local posX, posY = imgui.GetWindowPos()
-    windowPosX = posX
-    windowPosY = posY
+    if posX ~= windowPosX or posY ~= windowPosY then
+        windowPosX = posX
+        windowPosY = posY
+        state.Settings.FishingWindowX = posX
+        state.Settings.FishingWindowY = posY
+        settings.save()
+    end
 
     pop_font()
     imgui.End()
