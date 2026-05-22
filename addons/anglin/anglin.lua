@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.7'
+addon.version   = '3.71'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -170,7 +170,6 @@ local defaults = T{
     },
     CaughtColor = "FFFFFFFF",   -- RRGGBBAA hex for guide "Caught" label (white)
     UncaughtColor = "808080FF", -- RRGGBBAA hex for guide "Uncaught" label (gray)
-    SilentToggle = false,       -- suppress "X window toggled." chat messages
 }
 
 local state = {
@@ -284,6 +283,68 @@ local baitTypes = {
     ['Sinking Minnow'] = { consumable = false },
     ['Worm Lure'] = { consumable = false },
 }
+
+local fishSellPrices = {
+    ["Ahtapot"]=700, ["Alabaligi"]=98, ["Arrowwood Log"]=5, ["Armored Pisces"]=969,
+    ["Bastore Bream"]=600, ["Bastore Sardine"]=9, ["Betta"]=400, ["Bhefhel Marlin"]=307,
+    ["Bibiki Urchin"]=750, ["Bibikibo"]=99, ["Black Eel"]=192, ["Black Ghost"]=600,
+    ["Black Sole"]=700, ["Bladefish"]=408, ["Blindfish"]=229, ["Bluetail"]=300,
+    ["Brass Loach"]=276, ["Bugbear Mask"]=0, ["Ca Cuong"]=560, ["Caedarva Frog"]=100,
+    ["Cave Cherax"]=1600, ["Cheval Salmon"]=20, ["Cobalt Jellyfish"]=8,
+    ["Cone Calamary"]=165, ["Copper Frog"]=20, ["Copper Ring"]=19, ["Coral Butterfly"]=127,
+    ["Coral Fragment"]=1750, ["Crayfish"]=10, ["Crescent Fish"]=403, ["Crystal Bass"]=0,
+    ["Damp Scroll"]=1, ["Dark Bass"]=20, ["Denizanasi"]=7, ["Dil"]=700,
+    ["Elshimo Frog"]=52, ["Elshimo Newt"]=179, ["Emperor Fish"]=615, ["Fat Greedie"]=0,
+    ["Fish Scale Shield"]=384, ["Forest Carp"]=22, ["Gavial Fish"]=500,
+    ["Garpike"]=610, ["Gerrothorax"]=118, ["Giant Catfish"]=102, ["Giant Chirai"]=1100,
+    ["Giant Donko"]=195, ["Gigant Octopus"]=238, ["Gigant Squid"]=612, ["Gil"]=0,
+    ["Gold Carp"]=289, ["Gold Lobster"]=194, ["Greedie"]=11, ["Grimmonite"]=717,
+    ["Gugru Tuna"]=100, ["Gugrusaurus"]=1760, ["Gurnard"]=475, ["Hamsi"]=7,
+    ["Hydrogauge"]=0, ["Icefish"]=156, ["Istakoz"]=200, ["Istavrit"]=100,
+    ["Istiridye"]=279, ["Jungle Catfish"]=612, ["Kalamar"]=170, ["Kalkanbaligi"]=780,
+    ["Kaplumbaga"]=830, ["Kayabaligi"]=310, ["Kilicbaligi"]=450, ["Lakerda"]=103,
+    ["Lamp Marimo"]=786, ["Lik"]=1760, ["Lungfish"]=231, ["Matsya"]=25688,
+    ["Megalodon"]=864, ["Mercanbaligi"]=600, ["Mithra Snare"]=0, ["Moat Carp"]=10,
+    ["Moblin Mask"]=0, ["Mola Mola"]=975, ["Monke-Onke"]=306, ["Moorish Idol"]=242,
+    ["Morinabaligi"]=548, ["Muddy Siredon"]=0, ["Mythril Dagger"]=1431,
+    ["Mythril Sword"]=4100, ["Nebimonite"]=52, ["Noble Lady"]=400, ["Norg Shell"]=500,
+    ["Nosteau Herring"]=80, ["Ogre Eel"]=32, ["Pamtam Kelp"]=8, ["Phanauet Newt"]=4,
+    ["Pipira"]=46, ["Pirarucu"]=901, ["Pterygotus"]=750, ["Quus"]=20,
+    ["Red Terrapin"]=306, ["Rhinochimera"]=613, ["Ripped Cap"]=0, ["Rusty Bucket"]=51,
+    ["Rusty Cap"]=97, ["Rusty Greatsword"]=86, ["Rusty Leggings"]=12, ["Rusty Pick"]=115,
+    ["Rusty Subligar"]=15, ["Ryugu Titan"]=1500, ["Sandfish"]=26, ["Sazanbaligi"]=300,
+    ["Sea Zombie"]=628, ["Shall Shell"]=300, ["Shining Trout"]=26, ["Silver Ring"]=250,
+    ["Silver Shark"]=500, ["Takitaro"]=714, ["Tarutaru Snare"]=0, ["Tavnazian Goby"]=400,
+    ["Three-Eyed Fish"]=512, ["Three-eyed Fish"]=512, ["Tiger Cod"]=52,
+    ["Tiny Goldfish"]=1, ["Titanic Sawfish"]=1652, ["Titanictus"]=700,
+    ["Tricolored Carp"]=52, ["Tricorn"]=616, ["Trilobite"]=40, ["Trumpet Shell"]=512,
+    ["Turnabaligi"]=693, ["Uskumru"]=300, ["Veydal Wrasse"]=420, ["Vongola Clam"]=192,
+    ["Yayinbaligi"]=225, ["Yellow Globe"]=20, ["Yilanbaligi"]=200,
+    ["Zafmlug Bass"]=31, ["Zebra Eel"]=385,
+}
+
+local function get_sell_price(name)
+    if not name then return nil end
+    local p = fishSellPrices[name]
+    if p ~= nil then return p end
+    local lower = name:lower()
+    for k, v in pairs(fishSellPrices) do
+        if k:lower() == lower then return v end
+    end
+    return nil
+end
+
+local function calc_gil_value(catchData)
+    local total = 0
+    for name, count in pairs(catchData.fishCaught) do
+        local price = get_sell_price(name)
+        if price and price > 0 then
+            total = total + price * count
+        end
+    end
+    return total
+end
+
 local fishingGuide = {
 	{ name = "Ahtapot", skill = 90, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Ball of Crayfish Paste, Peeled Lobster, Shrimp Lure", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Alabaligi", skill = 37, location = "Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Minnow, Sinking Minnow", rod = "Halcyon Rod", type = "Fish" },
@@ -1254,21 +1315,15 @@ ashita.events.register('command', 'anglin_command', function(e)
     
     if subcmd == 'stats' then
         showStats = not showStats
-        if not state.Settings.SilentToggle then
-            AshitaCore:GetChatManager():QueueCommand(1, '/echo Stats window toggled.')
-        end
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Stats window toggled.')
     
     elseif subcmd == 'settings' then
         showSettings = not showSettings
-        if not state.Settings.SilentToggle then
-            AshitaCore:GetChatManager():QueueCommand(1, '/echo Settings window toggled.')
-        end
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Settings window toggled.')
     
     elseif subcmd == 'guide' then
         showGuide = not showGuide
-        if not state.Settings.SilentToggle then
-            AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
-        end
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
 
     else
         AshitaCore:GetChatManager():QueueCommand(1,
@@ -1414,6 +1469,18 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                             imgui.TextWrapped(string.format("Bait/Lure: %s", fish.bait))
                             imgui.TextWrapped(string.format("Rod: %s", fish.rod))
                         end
+                        local sp = get_sell_price(fish.name)
+                        if sp ~= nil then
+                            if sp > 0 then
+                                imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                                imgui.TextUnformatted(string.format("Sell Price: %d gil", sp))
+                                imgui.PopStyleColor()
+                            else
+                                imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                                imgui.TextUnformatted("Sell Price: No value")
+                                imgui.PopStyleColor()
+                            end
+                        end
                         imgui.Unindent()
                         imgui.Spacing()
                     end
@@ -1429,6 +1496,14 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         if fish.type ~= "Monster" then
                             imgui.TextWrapped(string.format("Bait: %s", fish.bait))
                             imgui.TextUnformatted(string.format("Rod: %s", fish.rod))
+                        end
+                        local hsp = get_sell_price(fish.name)
+                        if hsp ~= nil then
+                            if hsp > 0 then
+                                imgui.TextUnformatted(string.format("Sell: %d gil", hsp))
+                            else
+                                imgui.TextUnformatted("Sell: No value")
+                            end
                         end
                         if caught then
                             local catchCount = 0
@@ -1616,6 +1691,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     if imgui.CollapsingHeader("Fish Caught", ImGuiTreeNodeFlags_DefaultOpen) then
                         drawColoredText("Total Fish:", tostring(dailyData.totalFish), Colors.Success)
+                        local dailyGil = calc_gil_value(data.state.daily)
+                        if dailyGil > 0 then
+                            drawColoredText("Est. Gil Value:", string.format("%d gil", dailyGil), Colors.Warning)
+                        end
                         
                         if #dailyData.fishList > 0 then
                             imgui.Spacing()
@@ -1686,6 +1765,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
 
                     if imgui.CollapsingHeader("Fish Caught", ImGuiTreeNodeFlags_DefaultOpen) then
                         drawColoredText("Total Fish:", tostring(lifetimeData.totalFish), Colors.Success)
+                        local lifetimeGil = calc_gil_value(data.state.lifetime)
+                        if lifetimeGil > 0 then
+                            drawColoredText("Est. Gil Value:", string.format("%d gil", lifetimeGil), Colors.Warning)
+                        end
                         
                         if #lifetimeData.fishList > 0 then
                             imgui.Spacing()
@@ -1988,23 +2071,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 state.Settings.CaughtColor   = "FFFFFFFF"
                 state.Settings.UncaughtColor = "808080FF"
                 settings.save()
-            end
-
-            imgui.Spacing()
-            imgui.Spacing()
-
-            -- Silent toggle option
-            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
-            imgui.TextUnformatted("Chat Messages:")
-            imgui.PopStyleColor()
-            imgui.Spacing()
-            local silentToggle = { state.Settings.SilentToggle }
-            if imgui.Checkbox("Suppress window toggle messages", silentToggle) then
-                state.Settings.SilentToggle = silentToggle[1]
-                settings.save()
-            end
-            if imgui.IsItemHovered() then
-                imgui.SetTooltip("When enabled, \"/anglin stats|settings|guide\" will not\nprint a confirmation message in chat.")
             end
 
             imgui.Spacing()
