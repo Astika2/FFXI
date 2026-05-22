@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.7'
+addon.version   = '3.9.8'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1162,49 +1162,86 @@ local function check_for_update()
 
     if ver_gt(remote, CURRENT_VERSION) then
         updateAvailable = true
-        updateMessageDelay = os.clock() + 15
+        updateMessageDelay = os.clock() + 2
     end
 end
 
 local function perform_update()
-    if not updateAvailable then
-        echo('No update available.')
+    local ok, body, code = pcall(function()
+        return https.request(UPDATE_VERSION_URL .. '?t=' .. os.time())
+    end)
+
+    if not ok or code ~= 200 or not body then
+        echo('Could not reach GitHub to check for updates.')
         return
     end
 
-    echo(string.format('Downloading v%s...', latestVersion))
+    local remote = body:match("addon%.version%s*=%s*'([^']+)'")
+    if not remote then
+        remote = body:match('addon%.version%s*=%s*"([^"]+)"')
+    end
+
+    if not remote then
+        echo('Could not determine remote version.')
+        return
+    end
+
+    latestVersion = remote
+
+    local function parse_ver(v)
+        local parts = {}
+        for n in v:gmatch('%d+') do table.insert(parts, tonumber(n)) end
+        return parts
+    end
+
+    local function ver_gt(a, b)
+        local pa, pb = parse_ver(a), parse_ver(b)
+        for i = 1, math.max(#pa, #pb) do
+            local ai = pa[i] or 0
+            local bi = pb[i] or 0
+            if ai > bi then return true end
+            if ai < bi then return false end
+        end
+        return false
+    end
+
+    if not ver_gt(remote, CURRENT_VERSION) then
+        echo(string.format('Already up to date. (v%s)', CURRENT_VERSION))
+        return
+    end
 
     local allOk = true
+    local messages = { string.format('Downloading v%s...', remote) }
 
     for _, f in ipairs(UPDATE_FILES) do
-        local ok, body, code = pcall(function()
+        local fok, fbody, fcode = pcall(function()
             return https.request(f.url .. '?t=' .. os.time())
         end)
 
-        if not ok or code ~= 200 or not body or body == '' then
-            echo(string.format('Failed to download %s (HTTP %s). Update aborted.', f.label, tostring(code)))
+        if not fok or fcode ~= 200 or not fbody or fbody == '' then
+            table.insert(messages, string.format('Failed to download %s (HTTP %s). Update aborted.', f.label, tostring(fcode)))
             allOk = false
             break
         end
 
         local out = io.open(f.path, 'wb')
         if not out then
-            echo(string.format('Cannot write %s. Check file permissions. Update aborted.', f.path))
+            table.insert(messages, string.format('Cannot write %s. Check file permissions. Update aborted.', f.path))
             allOk = false
             break
         end
-        out:write(body)
+        out:write(fbody)
         out:close()
-        echo(string.format('Updated %s.', f.label))
+        table.insert(messages, string.format('Updated %s.', f.label))
     end
 
     if allOk then
-        echo(string.format(
-            'Update to v%s complete! Type: /addon reload anglin',
-            latestVersion
-        ))
+        table.insert(messages, string.format('Update to v%s complete! Type: /addon reload anglin', remote))
         updateAvailable = false
+        updateMessageDelay = nil
     end
+
+    echo(table.concat(messages, '\n'))
 end
 
 local function reset_fishing_session()
