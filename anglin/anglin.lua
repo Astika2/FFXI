@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.6'
+addon.version   = '3.9.7'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1120,6 +1120,8 @@ local function echo(msg)
     AshitaCore:GetChatManager():QueueCommand(1, '/echo [Anglin] ' .. msg)
 end
 
+local updateMessageDelay = nil  -- os.clock() target time for showing update message
+
 local function check_for_update()
     local ok, body, code = pcall(function()
         return https.request(UPDATE_VERSION_URL .. '?t=' .. os.time())
@@ -1160,10 +1162,7 @@ local function check_for_update()
 
     if ver_gt(remote, CURRENT_VERSION) then
         updateAvailable = true
-        echo(string.format(
-            'Update available! Current: v%s  Latest: v%s  --  Type /anglin update to install.',
-            CURRENT_VERSION, remote
-        ))
+        updateMessageDelay = os.clock() + 2
     end
 end
 
@@ -1496,6 +1495,14 @@ ashita.events.register('command', 'anglin_command', function(e)
 end)
 
 ashita.events.register('d3d_present', 'anglin_render', function()
+    if updateMessageDelay and os.clock() >= updateMessageDelay then
+        echo(string.format(
+            'Update available! Current: v%s  Latest: v%s  --  Type /anglin update to install.',
+            CURRENT_VERSION, latestVersion
+        ))
+        updateMessageDelay = nil
+    end
+
     AnimState.hookPulse = (AnimState.hookPulse + 0.05) % (math.pi * 2)
     if AnimState.catchFlash > 0 then
         AnimState.catchFlash = math.max(0, AnimState.catchFlash - 0.02)
