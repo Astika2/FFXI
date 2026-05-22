@@ -494,7 +494,9 @@ data.set_daily_reset_callback = set_daily_reset_callback
 data.check_file_permissions = check_file_permissions
 data.get_jst_date = get_jst_date  -- Expose for debugging
 
--- Initialize on load
-initialize_player_data()
+-- data.init is called explicitly from anglin.lua's load event.
+-- It is an alias for initialize_player_data, kept here so the
+-- call in anglin.lua resolves correctly.
+data.init = initialize_player_data
 
 return data
