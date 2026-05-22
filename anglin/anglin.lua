@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.5'
+addon.version   = '3.9.6'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -175,8 +175,6 @@ local defaults = T{
     CaughtColor = "FFFFFFFF",   -- RRGGBBAA hex for guide "Caught" label (white)
     UncaughtColor = "808080FF", -- RRGGBBAA hex for guide "Uncaught" label (gray)
     SilentToggle = false,       -- suppress "X window toggled." chat messages
-    FishingWindowX = 100,       -- saved position of the fishing popup window
-    FishingWindowY = 100,
 }
 
 local state = {
@@ -1124,7 +1122,7 @@ end
 
 local function check_for_update()
     local ok, body, code = pcall(function()
-        return https.request(UPDATE_VERSION_URL)
+        return https.request(UPDATE_VERSION_URL .. '?t=' .. os.time())
     end)
 
     if not ok or code ~= 200 or not body then
@@ -1181,7 +1179,7 @@ local function perform_update()
 
     for _, f in ipairs(UPDATE_FILES) do
         local ok, body, code = pcall(function()
-            return https.request(f.url)
+            return https.request(f.url .. '?t=' .. os.time())
         end)
 
         if not ok or code ~= 200 or not body or body == '' then
@@ -1230,12 +1228,40 @@ local function reset_fishing_session()
     statsCache.lifetimeDirty = true
 end
 
+-- Save/load window position directly to a file in the config folder,
+-- completely independent of the settings library.
+local function get_pos_file()
+    return settings.settings_path() .. 'window_pos.lua'
+end
+
+local function save_window_pos()
+    local path = get_pos_file()
+    local f = io.open(path, 'w')
+    if f then
+        f:write(string.format('return { x = %d, y = %d }\n', windowPosX, windowPosY))
+        f:close()
+    end
+end
+
+local function load_window_pos()
+    local path = get_pos_file()
+    local f = io.open(path, 'r')
+    if not f then return end
+    f:close()
+    local ok, result = pcall(dofile, path)
+    if ok and type(result) == 'table' then
+        windowPosX = result.x or windowPosX
+        windowPosY = result.y or windowPosY
+    end
+end
+
 ashita.events.register('load', 'load_cb', function()
     update_player_name()
     state.Settings = settings.load(defaults)
     state.Font = fonts.new(state.Settings.Font)
-    windowPosX = state.Settings.FishingWindowX or 100
-    windowPosY = state.Settings.FishingWindowY or 100
+    windowPosX = 100
+    windowPosY = 100
+    load_window_pos()
     if state.Settings.CaughtColor == nil then
         state.Settings.CaughtColor = "FFFFFFFF"
     end
@@ -1288,11 +1314,13 @@ ashita.events.register('load', 'load_cb', function()
     check_for_update()
 end)
 
+-- Flush window position into settings on Zone Exit (0x000B).
 ashita.events.register('unload', 'unload_cb', function()
     if state.Font then
         state.Font:destroy()
         state.Font = nil
     end
+    save_window_pos()
     if state.Settings then
         settings.save()
     end
@@ -2227,17 +2255,14 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             drawSection("Fishing Window")
             imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
             imgui.TextUnformatted("The fishing popup window can be dragged freely while it is open.")
-            imgui.TextUnformatted(string.format("Saved position: X=%.0f, Y=%.0f",
-                state.Settings.FishingWindowX or 100, state.Settings.FishingWindowY or 100))
+            imgui.TextUnformatted(string.format("Saved position: X=%.0f, Y=%.0f", windowPosX, windowPosY))
             imgui.PopStyleColor()
             imgui.Spacing()
             if modernButton("Reset Window Position", 180, 26) then
                 windowPosX = 100
                 windowPosY = 100
-                state.Settings.FishingWindowX = 100
-                state.Settings.FishingWindowY = 100
                 windowPosSet = false
-                settings.save()
+                save_window_pos()
             end
 
             imgui.Spacing()
@@ -2426,9 +2451,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     if posX ~= windowPosX or posY ~= windowPosY then
         windowPosX = posX
         windowPosY = posY
-        state.Settings.FishingWindowX = posX
-        state.Settings.FishingWindowY = posY
-        settings.save()
+        save_window_pos()
     end
 
     pop_font()
