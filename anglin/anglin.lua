@@ -1162,7 +1162,7 @@ local function check_for_update()
 
     if ver_gt(remote, CURRENT_VERSION) then
         updateAvailable = true
-        updateMessageDelay = os.clock() + 2
+        updateMessageDelay = os.clock() + 15
     end
 end
 
