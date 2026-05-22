@@ -1,15 +1,19 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9'
+addon.version   = '3.9.2'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
+-- Capture before the local `addon` table below shadows the global.
+local CURRENT_VERSION = addon.version
+
 require('common')
-local fonts = require('fonts')
+local fonts    = require('fonts')
 local settings = require('settings')
-local imgui = require('imgui')
-local data = require('data_manager')
-local json = require('json')
+local imgui    = require('imgui')
+local data     = require('data_manager')
+local json     = require('json')
+local https    = require('socket.ssl.https')
 local addon = { name = 'Anglin' }
 local playerName = nil
 local Colors = {
@@ -1094,6 +1098,118 @@ local function detect_rod()
     end
 end
 
+-- ============================================================
+-- Auto-Update
+-- ============================================================
+local UPDATE_VERSION_URL = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/anglin.lua'
+local UPDATE_FILES = {
+    {
+        url      = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/anglin.lua',
+        path     = string.format('%s\\addons\\anglin\\anglin.lua', AshitaCore:GetInstallPath()),
+        label    = 'anglin.lua',
+    },
+    {
+        url      = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/data_manager.lua',
+        path     = string.format('%s\\addons\\anglin\\data_manager.lua', AshitaCore:GetInstallPath()),
+        label    = 'data_manager.lua',
+    },
+}
+
+local updateAvailable = false
+local latestVersion   = nil
+
+local function echo(msg)
+    AshitaCore:GetChatManager():QueueCommand(1, '/echo [Anglin] ' .. msg)
+end
+
+local function check_for_update()
+    local ok, body, code = pcall(function()
+        return https.request(UPDATE_VERSION_URL)
+    end)
+
+    if not ok or code ~= 200 or not body then
+        return
+    end
+
+    local remote = body:match("addon%.version%s*=%s*'([^']+)'")
+    if not remote then
+        remote = body:match('addon%.version%s*=%s*"([^"]+)"')
+    end
+
+    if not remote then return end
+    if not CURRENT_VERSION or CURRENT_VERSION == '' then return end
+
+    latestVersion = remote
+
+    local function parse_ver(v)
+        local parts = {}
+        for n in v:gmatch('%d+') do
+            table.insert(parts, tonumber(n))
+        end
+        return parts
+    end
+
+    local function ver_gt(a, b)
+        local pa, pb = parse_ver(a), parse_ver(b)
+        for i = 1, math.max(#pa, #pb) do
+            local ai = pa[i] or 0
+            local bi = pb[i] or 0
+            if ai > bi then return true end
+            if ai < bi then return false end
+        end
+        return false
+    end
+
+    if ver_gt(remote, CURRENT_VERSION) then
+        updateAvailable = true
+        echo(string.format(
+            'Update available! Current: v%s  Latest: v%s  --  Type /anglin update to install.',
+            CURRENT_VERSION, remote
+        ))
+    end
+end
+
+local function perform_update()
+    if not updateAvailable then
+        echo('No update available.')
+        return
+    end
+
+    echo(string.format('Downloading v%s...', latestVersion))
+
+    local allOk = true
+
+    for _, f in ipairs(UPDATE_FILES) do
+        local ok, body, code = pcall(function()
+            return https.request(f.url)
+        end)
+
+        if not ok or code ~= 200 or not body or body == '' then
+            echo(string.format('Failed to download %s (HTTP %s). Update aborted.', f.label, tostring(code)))
+            allOk = false
+            break
+        end
+
+        local out = io.open(f.path, 'wb')
+        if not out then
+            echo(string.format('Cannot write %s. Check file permissions. Update aborted.', f.path))
+            allOk = false
+            break
+        end
+        out:write(body)
+        out:close()
+        echo(string.format('Updated %s.', f.label))
+    end
+
+    if allOk then
+        echo(string.format(
+            'Update to v%s complete! Type: /addon reload anglin',
+            latestVersion
+        ))
+        updateAvailable = false
+    end
+end
+
 local function reset_fishing_session()
     state.Hook = nil
     state.HookColor = nil
@@ -1163,8 +1279,13 @@ ashita.events.register('load', 'load_cb', function()
         statsCache.dailyDirty = true
         AshitaCore:GetChatManager():QueueCommand(1, '/echo [Anglin] Daily stats have been reset (new day in JST)')
     end)
+
+    -- Init data: resolves path, migrates from old location if needed, then loads
+    data.init(playerName)
     
     data.check_daily_reset()
+
+    check_for_update()
 end)
 
 ashita.events.register('unload', 'unload_cb', function()
@@ -1312,7 +1433,7 @@ ashita.events.register('command', 'anglin_command', function(e)
     e.blocked = true
 
     if (#args == 1) then
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide')
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin update')
         return
     end
 
@@ -1335,6 +1456,9 @@ ashita.events.register('command', 'anglin_command', function(e)
         if not state.Settings.SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
         end
+
+    elseif subcmd == 'update' then
+        perform_update()
 
     else
         AshitaCore:GetChatManager():QueueCommand(1,
