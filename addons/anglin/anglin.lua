@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.69'
+addon.version   = '3.7'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -170,6 +170,7 @@ local defaults = T{
     },
     CaughtColor = "FFFFFFFF",   -- RRGGBBAA hex for guide "Caught" label (white)
     UncaughtColor = "808080FF", -- RRGGBBAA hex for guide "Uncaught" label (gray)
+    SilentToggle = false,       -- suppress "X window toggled." chat messages
 }
 
 local state = {
@@ -1253,15 +1254,21 @@ ashita.events.register('command', 'anglin_command', function(e)
     
     if subcmd == 'stats' then
         showStats = not showStats
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Stats window toggled.')
+        if not state.Settings.SilentToggle then
+            AshitaCore:GetChatManager():QueueCommand(1, '/echo Stats window toggled.')
+        end
     
     elseif subcmd == 'settings' then
         showSettings = not showSettings
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Settings window toggled.')
+        if not state.Settings.SilentToggle then
+            AshitaCore:GetChatManager():QueueCommand(1, '/echo Settings window toggled.')
+        end
     
     elseif subcmd == 'guide' then
         showGuide = not showGuide
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
+        if not state.Settings.SilentToggle then
+            AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
+        end
 
     else
         AshitaCore:GetChatManager():QueueCommand(1,
@@ -1981,6 +1988,23 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 state.Settings.CaughtColor   = "FFFFFFFF"
                 state.Settings.UncaughtColor = "808080FF"
                 settings.save()
+            end
+
+            imgui.Spacing()
+            imgui.Spacing()
+
+            -- Silent toggle option
+            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+            imgui.TextUnformatted("Chat Messages:")
+            imgui.PopStyleColor()
+            imgui.Spacing()
+            local silentToggle = { state.Settings.SilentToggle }
+            if imgui.Checkbox("Suppress window toggle messages", silentToggle) then
+                state.Settings.SilentToggle = silentToggle[1]
+                settings.save()
+            end
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip("When enabled, \"/anglin stats|settings|guide\" will not\nprint a confirmation message in chat.")
             end
 
             imgui.Spacing()
