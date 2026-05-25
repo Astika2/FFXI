@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.9'
+addon.version   = '3.9.9.1'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1264,30 +1264,97 @@ local function reset_fishing_session()
     statsCache.lifetimeDirty = true
 end
 
--- Save/load window position directly to a file in the config folder,
--- completely independent of the settings library.
-local function get_pos_file()
-    return settings.settings_path() .. 'window_pos.lua'
+-- Save/load all user-facing settings (plus window position) directly to a file,
+-- completely independent of the settings library.  The settings library has known
+-- issues with boolean false values and nested subtables, so we bypass it entirely
+-- for everything the user can change in the Settings UI.
+local function get_prefs_file()
+    return settings.settings_path() .. 'anglin_prefs.lua'
 end
 
-local function save_window_pos()
-    local path = get_pos_file()
-    local f = io.open(path, 'w')
-    if f then
-        f:write(string.format('return { x = %d, y = %d }\n', windowPosX, windowPosY))
-        f:close()
-    end
-end
-
-local function load_window_pos()
-    local path = get_pos_file()
-    local f = io.open(path, 'r')
-    if not f then return end
-    f:close()
-    local ok, result = pcall(dofile, path)
+-- Migrate from the old window_pos.lua file if it exists and the new one doesn't.
+local function migrate_window_pos()
+    local oldPath = settings.settings_path() .. 'window_pos.lua'
+    local newPath = get_prefs_file()
+    local newF = io.open(newPath, 'r')
+    if newF then newF:close(); return end   -- new file already exists, nothing to do
+    local oldF = io.open(oldPath, 'r')
+    if not oldF then return end             -- nothing to migrate
+    oldF:close()
+    local ok, result = pcall(dofile, oldPath)
     if ok and type(result) == 'table' then
         windowPosX = result.x or windowPosX
         windowPosY = result.y or windowPosY
+    end
+end
+
+local function save_prefs()
+    if not state.Settings then return end
+    local path = get_prefs_file()
+    local f = io.open(path, 'w')
+    if not f then return end
+    -- Serialise every user-facing setting as plain Lua literals so that
+    -- no value (including boolean false) can be silently dropped.
+    local cc = state.Settings.CustomColors or {}
+    f:write('return {\n')
+    f:write(string.format('  window_x          = %d,\n',    windowPosX))
+    f:write(string.format('  window_y          = %d,\n',    windowPosY))
+    f:write(string.format('  WindowTransparency = %.4f,\n', state.Settings.WindowTransparency or 0.92))
+    f:write(string.format('  FontScale          = %.4f,\n', state.Settings.FontScale          or 1.15))
+    f:write(string.format('  ColorTheme         = %q,\n',   state.Settings.ColorTheme         or 'Soft Blue'))
+    f:write(string.format('  CaughtColor        = %q,\n',   state.Settings.CaughtColor        or 'FFFFFFFF'))
+    f:write(string.format('  UncaughtColor      = %q,\n',   state.Settings.UncaughtColor      or '808080FF'))
+    f:write(string.format('  SilentToggle       = %s,\n',   tostring(state.Settings.SilentToggle == true)))
+    f:write('  CustomColors = {\n')
+    f:write(string.format('    Primary      = %q,\n', cc.Primary      or 'FFB974FF'))
+    f:write(string.format('    PrimaryDark  = %q,\n', cc.PrimaryDark  or 'D69954FF'))
+    f:write(string.format('    PrimaryLight = %q,\n', cc.PrimaryLight or 'FFD49FFF'))
+    f:write('  },\n')
+    f:write('}\n')
+    f:close()
+end
+
+-- save_window_pos is kept as an alias so the existing call-sites still work.
+local function save_window_pos()
+    save_prefs()
+end
+
+local function load_prefs()
+    migrate_window_pos()
+    local path = get_prefs_file()
+    local fCheck = io.open(path, 'r')
+    if not fCheck then return end
+    fCheck:close()
+    local ok, result = pcall(dofile, path)
+    if not (ok and type(result) == 'table') then return end
+
+    windowPosX = result.window_x or windowPosX
+    windowPosY = result.window_y or windowPosY
+
+    if result.WindowTransparency ~= nil then
+        state.Settings.WindowTransparency = result.WindowTransparency
+    end
+    if result.FontScale ~= nil then
+        state.Settings.FontScale = result.FontScale
+    end
+    if result.ColorTheme ~= nil then
+        state.Settings.ColorTheme = result.ColorTheme
+    end
+    if result.CaughtColor ~= nil then
+        state.Settings.CaughtColor = result.CaughtColor
+    end
+    if result.UncaughtColor ~= nil then
+        state.Settings.UncaughtColor = result.UncaughtColor
+    end
+    -- boolean: the file writes "true"/"false" as Lua literals, dofile returns them as booleans
+    if result.SilentToggle ~= nil then
+        state.Settings.SilentToggle = (result.SilentToggle == true)
+    end
+    if type(result.CustomColors) == 'table' then
+        state.Settings.CustomColors = state.Settings.CustomColors or T{}
+        if result.CustomColors.Primary      ~= nil then state.Settings.CustomColors.Primary      = result.CustomColors.Primary      end
+        if result.CustomColors.PrimaryDark  ~= nil then state.Settings.CustomColors.PrimaryDark  = result.CustomColors.PrimaryDark  end
+        if result.CustomColors.PrimaryLight ~= nil then state.Settings.CustomColors.PrimaryLight = result.CustomColors.PrimaryLight end
     end
 end
 
@@ -1297,47 +1364,9 @@ ashita.events.register('load', 'load_cb', function()
     state.Font = fonts.new(state.Settings.Font)
     windowPosX = 100
     windowPosY = 100
-    load_window_pos()
-
-    -- Nil-guards: ensure every setting key exists, filling from defaults if missing.
-    -- This handles saves created before a key was added to `defaults`.
-    if state.Settings.WindowTransparency == nil then
-        state.Settings.WindowTransparency = defaults.WindowTransparency
-    end
-    if state.Settings.FontScale == nil then
-        state.Settings.FontScale = defaults.FontScale
-    end
-    if state.Settings.ColorTheme == nil then
-        state.Settings.ColorTheme = defaults.ColorTheme
-    end
-    if state.Settings.CustomColors == nil then
-        state.Settings.CustomColors = T{
-            Primary    = defaults.CustomColors.Primary,
-            PrimaryDark  = defaults.CustomColors.PrimaryDark,
-            PrimaryLight = defaults.CustomColors.PrimaryLight,
-        }
-    else
-        -- Also guard each sub-key individually
-        if state.Settings.CustomColors.Primary == nil then
-            state.Settings.CustomColors.Primary = defaults.CustomColors.Primary
-        end
-        if state.Settings.CustomColors.PrimaryDark == nil then
-            state.Settings.CustomColors.PrimaryDark = defaults.CustomColors.PrimaryDark
-        end
-        if state.Settings.CustomColors.PrimaryLight == nil then
-            state.Settings.CustomColors.PrimaryLight = defaults.CustomColors.PrimaryLight
-        end
-    end
-    if state.Settings.CaughtColor == nil then
-        state.Settings.CaughtColor = "FFFFFFFF"
-    end
-    if state.Settings.UncaughtColor == nil then
-        state.Settings.UncaughtColor = "808080FF"
-    end
-    if state.Settings.SilentToggle == nil then
-        state.Settings.SilentToggle = defaults.SilentToggle
-    end
-
+    -- load_prefs reads anglin_prefs.lua (all user-facing settings + window pos)
+    -- and overlays saved values onto state.Settings.  Also migrates window_pos.lua.
+    load_prefs()
     if state.Settings.ColorTheme then
         if state.Settings.ColorTheme == "Custom" and state.Settings.CustomColors then
             local primary = parseHexColor(state.Settings.CustomColors.Primary)
@@ -1384,16 +1413,12 @@ ashita.events.register('load', 'load_cb', function()
     check_for_update()
 end)
 
--- Flush window position into settings on Zone Exit (0x000B).
 ashita.events.register('unload', 'unload_cb', function()
     if state.Font then
         state.Font:destroy()
         state.Font = nil
     end
-    save_window_pos()
-    if state.Settings then
-        settings.save()
-    end
+    save_prefs()
     data.save_state()
 end)
 
@@ -2118,7 +2143,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             
             if imgui.SliderFloat("##transparency", transparency, 0.0, 1.0, "%.2f") then
                 state.Settings.WindowTransparency = transparency[1]
-                settings.save()
+                save_prefs()
             end
             
             imgui.PopStyleVar()
@@ -2140,7 +2165,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             
             if imgui.SliderFloat("##fontscale", fontScale, 0.8, 2.0, "%.2f") then
                 state.Settings.FontScale = fontScale[1]
-                settings.save()
+                save_prefs()
             end
             
             imgui.PopStyleVar()
@@ -2166,7 +2191,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         if themeName ~= "Custom" then
                             applyColorTheme(themeName)
                         end
-                        settings.save()
+                        save_prefs()
                     end
                     if isSelected then
                         imgui.SetItemDefaultFocus()
@@ -2205,7 +2230,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     if parsed then
                         Colors.Primary = parsed
                         ColorThemes["Custom"].Primary = parsed
-                        settings.save()
+                        save_prefs()
                     end
                 end
                 imgui.PopItemWidth()
@@ -2222,7 +2247,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     if parsed then
                         Colors.PrimaryDark = parsed
                         ColorThemes["Custom"].PrimaryDark = parsed
-                        settings.save()
+                        save_prefs()
                     end
                 end
                 imgui.PopItemWidth()
@@ -2239,7 +2264,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     if parsed then
                         Colors.PrimaryLight = parsed
                         ColorThemes["Custom"].PrimaryLight = parsed
-                        settings.save()
+                        save_prefs()
                     end
                 end
                 imgui.PopItemWidth()
@@ -2270,7 +2295,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     if imgui.Selectable(c.name, isSelected) then
                         state.Settings.CaughtColor = c.hex
                         Colors.CaughtColor = c.value
-                        settings.save()
+                        save_prefs()
                     end
                     imgui.PopStyleColor()
                     if isSelected then imgui.SetItemDefaultFocus() end
@@ -2301,7 +2326,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     if imgui.Selectable(c.name, isSelected) then
                         state.Settings.UncaughtColor = c.hex
                         Colors.UncaughtColor = c.value
-                        settings.save()
+                        save_prefs()
                     end
                     imgui.PopStyleColor()
                     if isSelected then imgui.SetItemDefaultFocus() end
@@ -2323,7 +2348,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 Colors.UncaughtColor = 0xFF808080
                 state.Settings.CaughtColor   = "FFFFFFFF"
                 state.Settings.UncaughtColor = "808080FF"
-                settings.save()
+                save_prefs()
             end
 
             imgui.Spacing()
@@ -2354,7 +2379,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             local silentToggle = { state.Settings.SilentToggle }
             if imgui.Checkbox("Suppress window toggle messages", silentToggle) then
                 state.Settings.SilentToggle = silentToggle[1]
-                settings.save()
+                save_prefs()
             end
             if imgui.IsItemHovered() then
                 imgui.SetTooltip("When enabled, '/anglin stats|settings|guide' will not print a confirmation message in chat.")
