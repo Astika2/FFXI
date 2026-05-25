@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.9.1'
+addon.version   = '3.9.9.2'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -209,6 +209,9 @@ local showSettings = false
 local showStats = false
 local showGuide = false
 local activeStatsTab = "Daily"
+local activeGuideTab = "Guide"
+local statsTabNeedsRestore = false
+local guideTabNeedsRestore = false
 local statsCache = {
     dailyDirty = true,
     lifetimeDirty = true,
@@ -1305,6 +1308,8 @@ local function save_prefs()
     f:write(string.format('  CaughtColor        = %q,\n',   state.Settings.CaughtColor        or 'FFFFFFFF'))
     f:write(string.format('  UncaughtColor      = %q,\n',   state.Settings.UncaughtColor      or '808080FF'))
     f:write(string.format('  SilentToggle       = %s,\n',   tostring(state.Settings.SilentToggle == true)))
+    f:write(string.format('  activeStatsTab     = %q,\n',   activeStatsTab))
+    f:write(string.format('  activeGuideTab     = %q,\n',   activeGuideTab))
     f:write('  CustomColors = {\n')
     f:write(string.format('    Primary      = %q,\n', cc.Primary      or 'FFB974FF'))
     f:write(string.format('    PrimaryDark  = %q,\n', cc.PrimaryDark  or 'D69954FF'))
@@ -1350,6 +1355,12 @@ local function load_prefs()
     if result.SilentToggle ~= nil then
         state.Settings.SilentToggle = (result.SilentToggle == true)
     end
+    if result.activeStatsTab ~= nil then
+        activeStatsTab = result.activeStatsTab
+    end
+    if result.activeGuideTab ~= nil then
+        activeGuideTab = result.activeGuideTab
+    end
     if type(result.CustomColors) == 'table' then
         state.Settings.CustomColors = state.Settings.CustomColors or T{}
         if result.CustomColors.Primary      ~= nil then state.Settings.CustomColors.Primary      = result.CustomColors.Primary      end
@@ -1367,6 +1378,9 @@ ashita.events.register('load', 'load_cb', function()
     -- load_prefs reads anglin_prefs.lua (all user-facing settings + window pos)
     -- and overlays saved values onto state.Settings.  Also migrates window_pos.lua.
     load_prefs()
+    -- Ensure the saved tabs are restored when windows are first opened after load.
+    statsTabNeedsRestore = true
+    guideTabNeedsRestore = true
     if state.Settings.ColorTheme then
         if state.Settings.ColorTheme == "Custom" and state.Settings.CustomColors then
             local primary = parseHexColor(state.Settings.CustomColors.Primary)
@@ -1411,6 +1425,9 @@ ashita.events.register('load', 'load_cb', function()
     data.check_daily_reset()
 
     check_for_update()
+
+    -- Always write the prefs file on load so it exists even on first run.
+    save_prefs()
 end)
 
 ashita.events.register('unload', 'unload_cb', function()
@@ -1556,7 +1573,7 @@ ashita.events.register('command', 'anglin_command', function(e)
     e.blocked = true
 
     if (#args == 1) then
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin update')
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin suggest | /anglin update')
         return
     end
 
@@ -1564,6 +1581,7 @@ ashita.events.register('command', 'anglin_command', function(e)
     
     if subcmd == 'stats' then
         showStats = not showStats
+        if showStats then statsTabNeedsRestore = true end
         if not state.Settings.SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Stats window toggled.')
         end
@@ -1576,6 +1594,19 @@ ashita.events.register('command', 'anglin_command', function(e)
     
     elseif subcmd == 'guide' then
         showGuide = not showGuide
+        if showGuide then guideTabNeedsRestore = true end
+        if not state.Settings.SilentToggle then
+            AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
+        end
+
+    elseif subcmd == 'suggest' then
+        if showGuide and activeGuideTab == "Skillups" then
+            showGuide = false
+        else
+            activeGuideTab = "Skillups"
+            guideTabNeedsRestore = true
+            showGuide = true
+        end
         if not state.Settings.SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
         end
@@ -1622,7 +1653,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
 
             if imgui.BeginTabBar("GuideTabBar") then
 
-                if imgui.BeginTabItem("Guide") then
+                local guideTabFlags = (guideTabNeedsRestore and activeGuideTab == "Guide") and ImGuiTabItemFlags_SetSelected or 0
+                if imgui.BeginTabItem("Guide", nil, guideTabFlags) then
+                    activeGuideTab = "Guide"
+                    guideTabNeedsRestore = false
             
             drawSection("Filters")
             
@@ -1811,7 +1845,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     imgui.EndTabItem()
                 end -- Guide tab
 
-                if imgui.BeginTabItem("Skillups") then
+                local skillupTabFlags = (guideTabNeedsRestore and activeGuideTab == "Skillups") and ImGuiTabItemFlags_SetSelected or 0
+                if imgui.BeginTabItem("Skillups", nil, skillupTabFlags) then
+                    activeGuideTab = "Skillups"
+                    guideTabNeedsRestore = false
                     local playerSkill = get_fishing_skill()
 
                     if not playerSkill then
@@ -1939,8 +1976,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             showStats = statsOpen[1]
             push_font()
             if imgui.BeginTabBar("StatsTabBar") then
-                if imgui.BeginTabItem("Daily") then
+                local dailyTabFlags = (statsTabNeedsRestore and activeStatsTab == "Daily") and ImGuiTabItemFlags_SetSelected or 0
+                if imgui.BeginTabItem("Daily", nil, dailyTabFlags) then
                     activeStatsTab = "Daily"
+                    statsTabNeedsRestore = false
                     
                     if statsCache.dailyDirty then
                         build_stats_cache(data.state.daily, statsCache.dailyData)
@@ -2025,8 +2064,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     imgui.EndTabItem()
                 end
                 
-                if imgui.BeginTabItem("Lifetime") then
+                local lifetimeTabFlags = (statsTabNeedsRestore and activeStatsTab == "Lifetime") and ImGuiTabItemFlags_SetSelected or 0
+                if imgui.BeginTabItem("Lifetime", nil, lifetimeTabFlags) then
                     activeStatsTab = "Lifetime"
+                    statsTabNeedsRestore = false
                     
                     if statsCache.lifetimeDirty then
                         build_stats_cache(data.state.lifetime, statsCache.lifetimeData)
