@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.9.2'
+addon.version   = '3.9.9.3'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -210,8 +210,9 @@ local showStats = false
 local showGuide = false
 local activeStatsTab = "Daily"
 local activeGuideTab = "Guide"
+local guideTabBarId = 0  -- increment to force ImGui to forget tab state
 local statsTabNeedsRestore = false
-local guideTabNeedsRestore = false
+local guideTabNeedsRestore = false  -- unused; kept to avoid errors if prefs reference it
 local statsCache = {
     dailyDirty = true,
     lifetimeDirty = true,
@@ -1309,7 +1310,6 @@ local function save_prefs()
     f:write(string.format('  UncaughtColor      = %q,\n',   state.Settings.UncaughtColor      or '808080FF'))
     f:write(string.format('  SilentToggle       = %s,\n',   tostring(state.Settings.SilentToggle == true)))
     f:write(string.format('  activeStatsTab     = %q,\n',   activeStatsTab))
-    f:write(string.format('  activeGuideTab     = %q,\n',   activeGuideTab))
     f:write('  CustomColors = {\n')
     f:write(string.format('    Primary      = %q,\n', cc.Primary      or 'FFB974FF'))
     f:write(string.format('    PrimaryDark  = %q,\n', cc.PrimaryDark  or 'D69954FF'))
@@ -1358,9 +1358,6 @@ local function load_prefs()
     if result.activeStatsTab ~= nil then
         activeStatsTab = result.activeStatsTab
     end
-    if result.activeGuideTab ~= nil then
-        activeGuideTab = result.activeGuideTab
-    end
     if type(result.CustomColors) == 'table' then
         state.Settings.CustomColors = state.Settings.CustomColors or T{}
         if result.CustomColors.Primary      ~= nil then state.Settings.CustomColors.Primary      = result.CustomColors.Primary      end
@@ -1380,7 +1377,6 @@ ashita.events.register('load', 'load_cb', function()
     load_prefs()
     -- Ensure the saved tabs are restored when windows are first opened after load.
     statsTabNeedsRestore = true
-    guideTabNeedsRestore = true
     if state.Settings.ColorTheme then
         if state.Settings.ColorTheme == "Custom" and state.Settings.CustomColors then
             local primary = parseHexColor(state.Settings.CustomColors.Primary)
@@ -1593,8 +1589,13 @@ ashita.events.register('command', 'anglin_command', function(e)
         end
     
     elseif subcmd == 'guide' then
-        showGuide = not showGuide
-        if showGuide then guideTabNeedsRestore = true end
+        if showGuide and activeGuideTab == "Guide" then
+            showGuide = false
+        else
+            activeGuideTab = "Guide"
+            guideTabBarId = guideTabBarId + 1
+            showGuide = true
+        end
         if not state.Settings.SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
         end
@@ -1604,7 +1605,7 @@ ashita.events.register('command', 'anglin_command', function(e)
             showGuide = false
         else
             activeGuideTab = "Skillups"
-            guideTabNeedsRestore = true
+            guideTabBarId = guideTabBarId + 1  -- new ID = fresh tab state
             showGuide = true
         end
         if not state.Settings.SilentToggle then
@@ -1634,6 +1635,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     if AnimState.catchFlash > 0 then
         AnimState.catchFlash = math.max(0, AnimState.catchFlash - 0.02)
     end
+
     if showGuide then
         build_guide_filter_options()
         
@@ -1651,12 +1653,13 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             showGuide = guideOpen[1]
             push_font()
 
-            if imgui.BeginTabBar("GuideTabBar") then
+            if imgui.BeginTabBar("GuideTabBar" .. guideTabBarId) then
 
-                local guideTabFlags = (guideTabNeedsRestore and activeGuideTab == "Guide") and ImGuiTabItemFlags_SetSelected or 0
-                if imgui.BeginTabItem("Guide", nil, guideTabFlags) then
-                    activeGuideTab = "Guide"
-                    guideTabNeedsRestore = false
+                -- Render the saved active tab first; ImGui always selects
+                -- the first tab it sees when the window initializes.
+                local function render_guide_tab()
+                    if imgui.BeginTabItem("Guide") then
+                        activeGuideTab = "Guide"
             
             drawSection("Filters")
             
@@ -1842,13 +1845,12 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 imgui.EndChild()
             end
 
-                    imgui.EndTabItem()
-                end -- Guide tab
-
-                local skillupTabFlags = (guideTabNeedsRestore and activeGuideTab == "Skillups") and ImGuiTabItemFlags_SetSelected or 0
-                if imgui.BeginTabItem("Skillups", nil, skillupTabFlags) then
-                    activeGuideTab = "Skillups"
-                    guideTabNeedsRestore = false
+                        imgui.EndTabItem()
+                    end
+                end
+                local function render_skillups_tab()
+                    if imgui.BeginTabItem("Skillups") then
+                        activeGuideTab = "Skillups"
                     local playerSkill = get_fishing_skill()
 
                     if not playerSkill then
@@ -1937,8 +1939,17 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                             end
                         end
                     end
-                    imgui.EndTabItem()
-                end -- Skillups tab
+                        imgui.EndTabItem()
+                    end
+                end
+
+                if activeGuideTab == "Skillups" then
+                    render_skillups_tab()
+                    render_guide_tab()
+                else
+                    render_guide_tab()
+                    render_skillups_tab()
+                end
 
                 imgui.EndTabBar()
             end -- TabBar
