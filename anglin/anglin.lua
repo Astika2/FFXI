@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.8'
+addon.version   = '3.9.9'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1298,12 +1298,46 @@ ashita.events.register('load', 'load_cb', function()
     windowPosX = 100
     windowPosY = 100
     load_window_pos()
+
+    -- Nil-guards: ensure every setting key exists, filling from defaults if missing.
+    -- This handles saves created before a key was added to `defaults`.
+    if state.Settings.WindowTransparency == nil then
+        state.Settings.WindowTransparency = defaults.WindowTransparency
+    end
+    if state.Settings.FontScale == nil then
+        state.Settings.FontScale = defaults.FontScale
+    end
+    if state.Settings.ColorTheme == nil then
+        state.Settings.ColorTheme = defaults.ColorTheme
+    end
+    if state.Settings.CustomColors == nil then
+        state.Settings.CustomColors = T{
+            Primary    = defaults.CustomColors.Primary,
+            PrimaryDark  = defaults.CustomColors.PrimaryDark,
+            PrimaryLight = defaults.CustomColors.PrimaryLight,
+        }
+    else
+        -- Also guard each sub-key individually
+        if state.Settings.CustomColors.Primary == nil then
+            state.Settings.CustomColors.Primary = defaults.CustomColors.Primary
+        end
+        if state.Settings.CustomColors.PrimaryDark == nil then
+            state.Settings.CustomColors.PrimaryDark = defaults.CustomColors.PrimaryDark
+        end
+        if state.Settings.CustomColors.PrimaryLight == nil then
+            state.Settings.CustomColors.PrimaryLight = defaults.CustomColors.PrimaryLight
+        end
+    end
     if state.Settings.CaughtColor == nil then
         state.Settings.CaughtColor = "FFFFFFFF"
     end
     if state.Settings.UncaughtColor == nil then
         state.Settings.UncaughtColor = "808080FF"
     end
+    if state.Settings.SilentToggle == nil then
+        state.Settings.SilentToggle = defaults.SilentToggle
+    end
+
     if state.Settings.ColorTheme then
         if state.Settings.ColorTheme == "Custom" and state.Settings.CustomColors then
             local primary = parseHexColor(state.Settings.CustomColors.Primary)
