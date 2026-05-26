@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.9.3'
+addon.version   = '3.9.10'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -878,6 +878,7 @@ local function normalize_catch_name(name)
     n = n:gsub("^set of%s+", "")
     n = n:gsub("^bunch of%s+", "")
     n = n:gsub("^piece of%s+", "")
+    n = n:gsub("^clump of%s+", "")
     return n
 end
 
@@ -1708,7 +1709,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.SameLine()
             
             local showUncaught = { guideFilters.showUncaught }
-            if imgui.Checkbox("Show Uncaught Fish", showUncaught) then
+            if imgui.Checkbox("Show Uncaught", showUncaught) then
                 guideFilters.showUncaught = showUncaught[1]
             end
             
