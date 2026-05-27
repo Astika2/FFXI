@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.10'
+addon.version   = '3.9.11'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -196,9 +196,18 @@ local state = {
     FishingEndTime = nil,
     AwaitingMonsterName = false,
 }
+-- Plain locals for settings that T{} metatable may silently swallow on write.
+-- These are the source of truth; state.Settings is only used for Font/legacy.
+local pref_ColorTheme    = "Soft Blue"
+local pref_CaughtColor   = "FFFFFFFF"
+local pref_UncaughtColor = "808080FF"
+local pref_SilentToggle  = false
+local pref_Transparency  = 0.92
+local pref_FontScale     = 1.15
+local pref_CustomColors  = { Primary = "FFB974FF", PrimaryDark = "D69954FF", PrimaryLight = "FFD49FFF" }
 local windowPosX = 100
 local function push_font()
-    imgui.SetWindowFontScale(state.Settings and state.Settings.FontScale or 1.15)
+    imgui.SetWindowFontScale(pref_FontScale)
 end
 
 local function pop_font()
@@ -211,6 +220,7 @@ local showGuide = false
 local activeStatsTab = "Daily"
 local activeGuideTab = "Guide"
 local guideTabBarId = 0  -- increment to force ImGui to forget tab state
+
 local statsTabNeedsRestore = false
 local guideTabNeedsRestore = false  -- unused; kept to avoid errors if prefs reference it
 local statsCache = {
@@ -878,7 +888,6 @@ local function normalize_catch_name(name)
     n = n:gsub("^set of%s+", "")
     n = n:gsub("^bunch of%s+", "")
     n = n:gsub("^piece of%s+", "")
-    n = n:gsub("^clump of%s+", "")
     return n
 end
 
@@ -1300,16 +1309,16 @@ local function save_prefs()
     if not f then return end
     -- Serialise every user-facing setting as plain Lua literals so that
     -- no value (including boolean false) can be silently dropped.
-    local cc = state.Settings.CustomColors or {}
+    local cc = pref_CustomColors
     f:write('return {\n')
     f:write(string.format('  window_x          = %d,\n',    windowPosX))
     f:write(string.format('  window_y          = %d,\n',    windowPosY))
-    f:write(string.format('  WindowTransparency = %.4f,\n', state.Settings.WindowTransparency or 0.92))
-    f:write(string.format('  FontScale          = %.4f,\n', state.Settings.FontScale          or 1.15))
-    f:write(string.format('  ColorTheme         = %q,\n',   state.Settings.ColorTheme         or 'Soft Blue'))
-    f:write(string.format('  CaughtColor        = %q,\n',   state.Settings.CaughtColor        or 'FFFFFFFF'))
-    f:write(string.format('  UncaughtColor      = %q,\n',   state.Settings.UncaughtColor      or '808080FF'))
-    f:write(string.format('  SilentToggle       = %s,\n',   tostring(state.Settings.SilentToggle == true)))
+    f:write(string.format('  WindowTransparency = %.4f,\n', pref_Transparency))
+    f:write(string.format('  FontScale          = %.4f,\n', pref_FontScale))
+    f:write(string.format('  ColorTheme         = %q,\n',   pref_ColorTheme))
+    f:write(string.format('  CaughtColor        = %q,\n',   pref_CaughtColor))
+    f:write(string.format('  UncaughtColor      = %q,\n',   pref_UncaughtColor))
+    f:write(string.format('  SilentToggle       = %s,\n',   tostring(pref_SilentToggle == true)))
     f:write(string.format('  activeStatsTab     = %q,\n',   activeStatsTab))
     f:write('  CustomColors = {\n')
     f:write(string.format('    Primary      = %q,\n', cc.Primary      or 'FFB974FF'))
@@ -1338,32 +1347,62 @@ local function load_prefs()
     windowPosY = result.window_y or windowPosY
 
     if result.WindowTransparency ~= nil then
-        state.Settings.WindowTransparency = result.WindowTransparency
+        pref_Transparency = result.WindowTransparency
     end
     if result.FontScale ~= nil then
-        state.Settings.FontScale = result.FontScale
+        pref_FontScale = result.FontScale
     end
     if result.ColorTheme ~= nil then
-        state.Settings.ColorTheme = result.ColorTheme
+        pref_ColorTheme = result.ColorTheme
     end
     if result.CaughtColor ~= nil then
-        state.Settings.CaughtColor = result.CaughtColor
+        pref_CaughtColor = result.CaughtColor
     end
     if result.UncaughtColor ~= nil then
-        state.Settings.UncaughtColor = result.UncaughtColor
+        pref_UncaughtColor = result.UncaughtColor
     end
     -- boolean: the file writes "true"/"false" as Lua literals, dofile returns them as booleans
     if result.SilentToggle ~= nil then
-        state.Settings.SilentToggle = (result.SilentToggle == true)
+        pref_SilentToggle = (result.SilentToggle == true)
     end
     if result.activeStatsTab ~= nil then
         activeStatsTab = result.activeStatsTab
     end
     if type(result.CustomColors) == 'table' then
-        state.Settings.CustomColors = state.Settings.CustomColors or T{}
-        if result.CustomColors.Primary      ~= nil then state.Settings.CustomColors.Primary      = result.CustomColors.Primary      end
-        if result.CustomColors.PrimaryDark  ~= nil then state.Settings.CustomColors.PrimaryDark  = result.CustomColors.PrimaryDark  end
-        if result.CustomColors.PrimaryLight ~= nil then state.Settings.CustomColors.PrimaryLight = result.CustomColors.PrimaryLight end
+        if result.CustomColors.Primary      ~= nil then pref_CustomColors.Primary      = result.CustomColors.Primary      end
+        if result.CustomColors.PrimaryDark  ~= nil then pref_CustomColors.PrimaryDark  = result.CustomColors.PrimaryDark  end
+        if result.CustomColors.PrimaryLight ~= nil then pref_CustomColors.PrimaryLight = result.CustomColors.PrimaryLight end
+    end
+end
+
+local function apply_prefs()
+    if pref_ColorTheme then
+        if pref_ColorTheme == "Custom" then
+            local primary = parseHexColor(pref_CustomColors.Primary)
+            local primaryDark = parseHexColor(pref_CustomColors.PrimaryDark)
+            local primaryLight = parseHexColor(pref_CustomColors.PrimaryLight)
+            if primary then Colors.Primary = primary end
+            if primaryDark then Colors.PrimaryDark = primaryDark end
+            if primaryLight then Colors.PrimaryLight = primaryLight end
+        else
+            applyColorTheme(pref_ColorTheme)
+        end
+    end
+    if pref_CaughtColor then
+        for _, c in ipairs(guideColorOptions) do
+            if c.hex:upper() == pref_CaughtColor:upper() then
+                Colors.CaughtColor = c.value
+                break
+            end
+        end
+    end
+    if pref_UncaughtColor then
+        for _, c in ipairs(guideColorOptions) do
+            if c.hex:upper() == pref_UncaughtColor:upper() then
+                Colors.UncaughtColor = c.value
+                break
+            end
+        end
     end
 end
 
@@ -1373,40 +1412,20 @@ ashita.events.register('load', 'load_cb', function()
     state.Font = fonts.new(state.Settings.Font)
     windowPosX = 100
     windowPosY = 100
-    -- load_prefs reads anglin_prefs.lua (all user-facing settings + window pos)
-    -- and overlays saved values onto state.Settings.  Also migrates window_pos.lua.
+    -- Register a callback so load_prefs runs again once the character is known
+    -- and settings_path() returns the character-specific folder.
+    settings.register('settings', 'anglin_prefs_cb', function()
+        -- Fire once when character becomes known so settings_path() is correct.
+        settings.unregister('settings', 'anglin_prefs_cb')
+        load_prefs()
+        apply_prefs()
+        save_prefs()
+    end)
+    -- Also run immediately in case the player is already logged in.
     load_prefs()
     -- Ensure the saved tabs are restored when windows are first opened after load.
     statsTabNeedsRestore = true
-    if state.Settings.ColorTheme then
-        if state.Settings.ColorTheme == "Custom" and state.Settings.CustomColors then
-            local primary = parseHexColor(state.Settings.CustomColors.Primary)
-            local primaryDark = parseHexColor(state.Settings.CustomColors.PrimaryDark)
-            local primaryLight = parseHexColor(state.Settings.CustomColors.PrimaryLight)
-            
-            if primary then Colors.Primary = primary end
-            if primaryDark then Colors.PrimaryDark = primaryDark end
-            if primaryLight then Colors.PrimaryLight = primaryLight end
-        else
-            applyColorTheme(state.Settings.ColorTheme)
-        end
-    end
-    if state.Settings.CaughtColor then
-        for _, c in ipairs(guideColorOptions) do
-            if c.hex:upper() == state.Settings.CaughtColor:upper() then
-                Colors.CaughtColor = c.value
-                break
-            end
-        end
-    end
-    if state.Settings.UncaughtColor then
-        for _, c in ipairs(guideColorOptions) do
-            if c.hex:upper() == state.Settings.UncaughtColor:upper() then
-                Colors.UncaughtColor = c.value
-                break
-            end
-        end
-    end
+    apply_prefs()
 
     build_filter_options()
     build_guide_filter_options()
@@ -1579,13 +1598,13 @@ ashita.events.register('command', 'anglin_command', function(e)
     if subcmd == 'stats' then
         showStats = not showStats
         if showStats then statsTabNeedsRestore = true end
-        if not state.Settings.SilentToggle then
+        if not pref_SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Stats window toggled.')
         end
     
     elseif subcmd == 'settings' then
         showSettings = not showSettings
-        if not state.Settings.SilentToggle then
+        if not pref_SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Settings window toggled.')
         end
     
@@ -1597,7 +1616,7 @@ ashita.events.register('command', 'anglin_command', function(e)
             guideTabBarId = guideTabBarId + 1
             showGuide = true
         end
-        if not state.Settings.SilentToggle then
+        if not pref_SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
         end
 
@@ -1609,7 +1628,7 @@ ashita.events.register('command', 'anglin_command', function(e)
             guideTabBarId = guideTabBarId + 1  -- new ID = fresh tab state
             showGuide = true
         end
-        if not state.Settings.SilentToggle then
+        if not pref_SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
         end
 
@@ -1640,7 +1659,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     if showGuide then
         build_guide_filter_options()
         
-        imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(state.Settings.WindowTransparency))
+        imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(pref_Transparency))
         imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
         imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
         imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
@@ -1709,7 +1728,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.SameLine()
             
             local showUncaught = { guideFilters.showUncaught }
-            if imgui.Checkbox("Show Uncaught", showUncaught) then
+            if imgui.Checkbox("Show Uncaught Fish", showUncaught) then
                 guideFilters.showUncaught = showUncaught[1]
             end
             
@@ -1970,7 +1989,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         imgui.PopStyleColor(4)
     end
     if showStats then
-        imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(state.Settings.WindowTransparency))
+        imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(pref_Transparency))
         imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
         imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
         imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
@@ -2189,13 +2208,13 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.TextUnformatted("Window Transparency")
             imgui.PopStyleColor()
             
-            local transparency = { state.Settings.WindowTransparency }
+            local transparency = { pref_Transparency }
             imgui.PushStyleColor(ImGuiCol_SliderGrab, Colors.Primary)
             imgui.PushStyleColor(ImGuiCol_SliderGrabActive, Colors.PrimaryDark)
             imgui.PushStyleVar(ImGuiStyleVar_GrabRounding, 4)
             
             if imgui.SliderFloat("##transparency", transparency, 0.0, 1.0, "%.2f") then
-                state.Settings.WindowTransparency = transparency[1]
+                pref_Transparency = transparency[1]
                 save_prefs()
             end
             
@@ -2203,7 +2222,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.PopStyleColor(2)
             
             imgui.Spacing()
-            drawColoredText("Current:", string.format("%.2f", state.Settings.WindowTransparency), Colors.Primary)
+            drawColoredText("Current:", string.format("%.2f", pref_Transparency), Colors.Primary)
             
             drawSection("Font Scale")
             
@@ -2211,13 +2230,13 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.TextUnformatted("UI Font Scale")
             imgui.PopStyleColor()
             
-            local fontScale = { state.Settings.FontScale or 1.15 }
+            local fontScale = { pref_FontScale }
             imgui.PushStyleColor(ImGuiCol_SliderGrab, Colors.Primary)
             imgui.PushStyleColor(ImGuiCol_SliderGrabActive, Colors.PrimaryDark)
             imgui.PushStyleVar(ImGuiStyleVar_GrabRounding, 4)
             
             if imgui.SliderFloat("##fontscale", fontScale, 0.8, 2.0, "%.2f") then
-                state.Settings.FontScale = fontScale[1]
+                pref_FontScale = fontScale[1]
                 save_prefs()
             end
             
@@ -2225,7 +2244,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.PopStyleColor(2)
             
             imgui.Spacing()
-            drawColoredText("Current:", string.format("%.2f", state.Settings.FontScale or 1.15), Colors.Primary)
+            drawColoredText("Current:", string.format("%.2f", pref_FontScale), Colors.Primary)
             
             drawSection("Color Theme")
             imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
@@ -2233,14 +2252,14 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.PopStyleColor()
             
             local themeNames = {"Soft Blue", "Ocean Teal", "Purple Dream", "Forest Green", "Sunset Orange", "Cool Gray", "Custom"}
-            local currentTheme = state.Settings.ColorTheme or "Soft Blue"
+            local currentTheme = pref_ColorTheme
             
             imgui.PushItemWidth(200)
             if imgui.BeginCombo("##ThemeSelector", currentTheme) then
                 for _, themeName in ipairs(themeNames) do
                     local isSelected = (themeName == currentTheme)
                     if imgui.Selectable(themeName, isSelected) then
-                        state.Settings.ColorTheme = themeName
+                        pref_ColorTheme = themeName
                         if themeName ~= "Custom" then
                             applyColorTheme(themeName)
                         end
@@ -2263,22 +2282,15 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 imgui.PopStyleColor()
                 
                 imgui.Spacing()
-                if not state.Settings.CustomColors then
-                    state.Settings.CustomColors = T{
-                        Primary = colorToHexString(Colors.Primary),
-                        PrimaryDark = colorToHexString(Colors.PrimaryDark),
-                        PrimaryLight = colorToHexString(Colors.PrimaryLight),
-                    }
-                end
                 imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
                 imgui.TextUnformatted("Primary Color:")
                 imgui.PopStyleColor()
                 imgui.SameLine()
                 
-                local primaryBuf = { state.Settings.CustomColors.Primary }
+                local primaryBuf = { pref_CustomColors.Primary }
                 imgui.PushItemWidth(150)
                 if imgui.InputText("##PrimaryColor", primaryBuf, 9) then
-                    state.Settings.CustomColors.Primary = primaryBuf[1]
+                    pref_CustomColors.Primary = primaryBuf[1]
                     local parsed = parseHexColor(primaryBuf[1])
                     if parsed then
                         Colors.Primary = parsed
@@ -2292,10 +2304,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 imgui.PopStyleColor()
                 imgui.SameLine()
                 
-                local primaryDarkBuf = { state.Settings.CustomColors.PrimaryDark }
+                local primaryDarkBuf = { pref_CustomColors.PrimaryDark }
                 imgui.PushItemWidth(150)
                 if imgui.InputText("##PrimaryDark", primaryDarkBuf, 9) then
-                    state.Settings.CustomColors.PrimaryDark = primaryDarkBuf[1]
+                    pref_CustomColors.PrimaryDark = primaryDarkBuf[1]
                     local parsed = parseHexColor(primaryDarkBuf[1])
                     if parsed then
                         Colors.PrimaryDark = parsed
@@ -2309,10 +2321,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 imgui.PopStyleColor()
                 imgui.SameLine()
                 
-                local primaryLightBuf = { state.Settings.CustomColors.PrimaryLight }
+                local primaryLightBuf = { pref_CustomColors.PrimaryLight }
                 imgui.PushItemWidth(150)
                 if imgui.InputText("##PrimaryLight", primaryLightBuf, 9) then
-                    state.Settings.CustomColors.PrimaryLight = primaryLightBuf[1]
+                    pref_CustomColors.PrimaryLight = primaryLightBuf[1]
                     local parsed = parseHexColor(primaryLightBuf[1])
                     if parsed then
                         Colors.PrimaryLight = parsed
@@ -2336,7 +2348,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.PopStyleColor()
             imgui.SameLine()
 
-            local currentCaughtName = guideColorNameFromHex(state.Settings.CaughtColor)
+            local currentCaughtName = guideColorNameFromHex(pref_CaughtColor)
             imgui.PushItemWidth(140)
             if imgui.BeginCombo("##CaughtColorDrop", currentCaughtName) then
                 for _, c in ipairs(guideColorOptions) do
@@ -2346,7 +2358,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     local b = bit.rshift(bit.band(c.value, 0xFF0000), 16) / 255
                     imgui.PushStyleColor(ImGuiCol_Text, c.value)
                     if imgui.Selectable(c.name, isSelected) then
-                        state.Settings.CaughtColor = c.hex
+                        pref_CaughtColor = c.hex
                         Colors.CaughtColor = c.value
                         save_prefs()
                     end
@@ -2370,14 +2382,14 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.PopStyleColor()
             imgui.SameLine()
 
-            local currentUncaughtName = guideColorNameFromHex(state.Settings.UncaughtColor)
+            local currentUncaughtName = guideColorNameFromHex(pref_UncaughtColor)
             imgui.PushItemWidth(140)
             if imgui.BeginCombo("##UncaughtColorDrop", currentUncaughtName) then
                 for _, c in ipairs(guideColorOptions) do
                     local isSelected = (c.name == currentUncaughtName)
                     imgui.PushStyleColor(ImGuiCol_Text, c.value)
                     if imgui.Selectable(c.name, isSelected) then
-                        state.Settings.UncaughtColor = c.hex
+                        pref_UncaughtColor = c.hex
                         Colors.UncaughtColor = c.value
                         save_prefs()
                     end
@@ -2399,8 +2411,8 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             if modernButton("Reset Guide Colors", 160, 26) then
                 Colors.CaughtColor   = 0xFFFFFFFF
                 Colors.UncaughtColor = 0xFF808080
-                state.Settings.CaughtColor   = "FFFFFFFF"
-                state.Settings.UncaughtColor = "808080FF"
+                pref_CaughtColor   = "FFFFFFFF"
+                pref_UncaughtColor = "808080FF"
                 save_prefs()
             end
 
@@ -2429,9 +2441,9 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.TextUnformatted("Chat Messages:")
             imgui.PopStyleColor()
             imgui.Spacing()
-            local silentToggle = { state.Settings.SilentToggle }
+            local silentToggle = { pref_SilentToggle }
             if imgui.Checkbox("Suppress window toggle messages", silentToggle) then
-                state.Settings.SilentToggle = silentToggle[1]
+                pref_SilentToggle = silentToggle[1]
                 save_prefs()
             end
             if imgui.IsItemHovered() then
@@ -2491,7 +2503,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             end
         end
     end
-    imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(state.Settings.WindowTransparency))
+    imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(pref_Transparency))
     imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
     imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
     imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
