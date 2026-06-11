@@ -1,6 +1,6 @@
 VERSION 4.0.2
 * Changed the trigger for the initial update check if addon loads with game client (from default.txt script) so that it always shows.
-* Changelog will now show ALL changes between your previous version (starting from v4), and the version you updated to - not everyone stays up to date :)
+* Changelog will now show ALL changes between your previous version (starting from v4), and the version you updated to.
 
 VERSION 4.0.1
 * Corrected when the fishing contest data is loaded on client start so that data populates properly without having to reload addon.
