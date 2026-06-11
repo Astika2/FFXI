@@ -1237,6 +1237,7 @@ end
 -- Auto-Update
 -- ============================================================
 local UPDATE_VERSION_URL = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/anglin.lua'
+local UPDATE_CHANGELOG_URL = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/CHANGELOG.md'
 local UPDATE_FILES = {
     {
         url      = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/anglin.lua',
@@ -1376,9 +1377,36 @@ local function perform_update()
         table.insert(messages, string.format('Update to v%s complete! Type: /addon reload anglin', remote))
         updateAvailable = false
         updateMessageDelay = nil
+
+        -- Fetch and display changelog for the new version
+        local cok, cbody, ccode = pcall(function()
+            return https.request(UPDATE_CHANGELOG_URL .. '?t=' .. os.time())
+        end)
+        if cok and ccode == 200 and cbody then
+            -- Find the section for the new version and print its bullet points
+            local inSection = false
+            local notes = {}
+            for line in cbody:gmatch('[^\r\n]+') do
+                if line:match('^##%s+v?' .. remote:gsub('%.', '%%.')) then
+                    inSection = true
+                elseif line:match('^##%s+') and inSection then
+                    break
+                elseif inSection and line:match('^%s*%-') then
+                    table.insert(notes, '  ' .. line:match('^%s*(.+)'))
+                end
+            end
+            if #notes > 0 then
+                table.insert(messages, string.format("What's new in v%s:", remote))
+                for _, note in ipairs(notes) do
+                    table.insert(messages, note)
+                end
+            end
+        end
     end
 
-    echo(table.concat(messages, '\n'))
+    for _, msg in ipairs(messages) do
+        echo(msg)
+    end
 end
 
 local function reset_fishing_session()
