@@ -1381,7 +1381,7 @@ local function perform_update()
             local currentSection = nil
             for line in cbody:gmatch('[^\r\n]+') do
                 local cleanLine = line:gsub('\r', '')
-                lineCount = lineCount + 1
+                
                 local ver = cleanLine:match('^VERSION%s+([%d%.]+)%s*$')
                 if ver then
                     if currentSection then
