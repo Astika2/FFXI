@@ -1359,14 +1359,19 @@ local function perform_update()
         table.insert(messages, string.format('Update to v%s complete! Type: /addon reload anglin', remote))
         updateAvailable = false
         updateMessageDelay = nil
+    end
 
+    for _, msg in ipairs(messages) do
+        echo(msg)
+    end
+
+    if allOk then
         -- Fetch changelog and show all versions newer than what the player had
         local cok, cbody, ccode = pcall(function()
             return https.request(UPDATE_CHANGELOG_URL .. '?t=' .. os.time())
         end)
         if cok and ccode == 200 and cbody then
-            -- Parse all sections out of the changelog
-            local sections = {}  -- ordered list of { version, notes }
+            local sections = {}
             local currentSection = nil
             for line in cbody:gmatch('[^\r\n]+') do
                 local ver = line:match('^##%s+v?([%d%.]+)')
@@ -1383,7 +1388,6 @@ local function perform_update()
                 table.insert(sections, currentSection)
             end
 
-            -- Collect sections newer than the pre-update version
             local collected = {}
             for _, section in ipairs(sections) do
                 if ver_gt(section.version, previousVersion) then
@@ -1392,19 +1396,15 @@ local function perform_update()
             end
 
             if #collected > 0 then
-                table.insert(messages, string.format("Changes since v%s:", previousVersion))
+                echo(string.format("Changes since v%s:", previousVersion))
                 for _, section in ipairs(collected) do
-                    table.insert(messages, string.format("  v%s:", section.version))
+                    echo(string.format("  v%s:", section.version))
                     for _, note in ipairs(section.notes) do
-                        table.insert(messages, note)
+                        echo(note)
                     end
                 end
             end
         end
-    end
-
-    for _, msg in ipairs(messages) do
-        echo(msg)
     end
 end
 
