@@ -1374,22 +1374,21 @@ local function perform_update()
         end)
         if cok and ccode == 200 and cbody then
             -- Parse all sections from changelog
+            -- Format: "VERSION X.X.X" header lines, "* note" bullet lines
             local sections = {}
             local currentSection = nil
             for line in cbody:gmatch('[^\r\n]+') do
                 local cleanLine = line:gsub('\r', '')
-                local ver = cleanLine:match('^##%s+v?([%d%.]+)%s*$')
+                local ver = cleanLine:match('^VERSION%s+([%d%.]+)%s*$')
                 if ver then
-                    -- Save completed section before starting new one
                     if currentSection then
                         table.insert(sections, currentSection)
                     end
                     currentSection = { version = ver, notes = {} }
-                elseif currentSection and cleanLine:match('^%s*%-') then
-                    table.insert(currentSection.notes, '  ' .. cleanLine:match('^%s*%-+%s*(.+)'))
+                elseif currentSection and cleanLine:match('^%*') then
+                    table.insert(currentSection.notes, '  ' .. cleanLine:match('^%*%s*(.+)'))
                 end
             end
-            -- Save the final section
             if currentSection then
                 table.insert(sections, currentSection)
             end
