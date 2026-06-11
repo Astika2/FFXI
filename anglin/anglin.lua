@@ -1374,7 +1374,7 @@ local function perform_update()
             local sections = {}
             local currentSection = nil
             for line in cbody:gmatch('[^\r\n]+') do
-                local ver = line:match('^##%s+v?([%d%.]+)')
+                local ver = line:match('^##%s+v?([%d%.]+)%s*$')
                 if ver then
                     if currentSection then
                         table.insert(sections, currentSection)
@@ -1398,6 +1398,7 @@ local function perform_update()
             if #collected > 0 then
                 echo(string.format("Changes since v%s:", previousVersion))
                 for _, section in ipairs(collected) do
+                    echo(" ")
                     echo(string.format("  v%s:", section.version))
                     for _, note in ipairs(section.notes) do
                         echo(note)
