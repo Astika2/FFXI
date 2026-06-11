@@ -1275,7 +1275,9 @@ local function echo(msg)
     AshitaCore:GetChatManager():QueueCommand(1, '/echo [Anglin] ' .. msg)
 end
 
-local updateMessageDelay = nil  -- os.clock() target time for showing update message
+local updateMessageDelay  = nil
+local changelogMessages   = nil
+local changelogDelay      = nil
 
 local function check_for_update()
     local ok, body, code = pcall(function()
@@ -1396,14 +1398,16 @@ local function perform_update()
             end
 
             if #collected > 0 then
-                echo(string.format("Changes since v%s:", previousVersion))
+                changelogMessages = {}
+                table.insert(changelogMessages, string.format("Changes since v%s:", previousVersion))
                 for _, section in ipairs(collected) do
-                    echo(" ")
-                    echo(string.format("  v%s:", section.version))
+                    table.insert(changelogMessages, " ")
+                    table.insert(changelogMessages, string.format("  v%s:", section.version))
                     for _, note in ipairs(section.notes) do
-                        echo(note)
+                        table.insert(changelogMessages, note)
                     end
                 end
+                changelogDelay = os.clock() + 0.5
             end
         end
     end
@@ -3215,5 +3219,15 @@ ashita.events.register('d3d_present', 'anglin_daily_check', function()
     if currentTime - lastDailyCheck >= 1 then
         lastDailyCheck = currentTime
         data.check_daily_reset()
+    end
+end)
+
+ashita.events.register('d3d_present', 'anglin_changelog_flush', function()
+    if changelogDelay and os.clock() >= changelogDelay and changelogMessages then
+        for _, msg in ipairs(changelogMessages) do
+            echo(msg)
+        end
+        changelogMessages = nil
+        changelogDelay    = nil
     end
 end)
