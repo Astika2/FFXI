@@ -1372,25 +1372,32 @@ local function perform_update()
         local cok, cbody, ccode = pcall(function()
             return https.request(UPDATE_CHANGELOG_URL .. '?t=' .. os.time())
         end)
+        echo(string.format('CL fetch: ok=%s code=%s len=%s', tostring(cok), tostring(ccode), cbody and tostring(#cbody) or 'nil'))
         if cok and ccode == 200 and cbody then
             -- Parse all sections from changelog
             -- Format: "VERSION X.X.X" header lines, "* note" bullet lines
             local sections = {}
             local currentSection = nil
+            local lineCount = 0
             for line in cbody:gmatch('[^\r\n]+') do
                 local cleanLine = line:gsub('\r', '')
+                lineCount = lineCount + 1
                 local ver = cleanLine:match('^VERSION%s+([%d%.]+)%s*$')
                 if ver then
                     if currentSection then
                         table.insert(sections, currentSection)
                     end
                     currentSection = { version = ver, notes = {} }
-                elseif currentSection and cleanLine:match('^%*') then
-                    table.insert(currentSection.notes, '  ' .. cleanLine:match('^%*%s*(.+)'))
+                elseif currentSection and cleanLine:match('^%s*%*') then
+                    table.insert(currentSection.notes, '  ' .. cleanLine:match('^%s*%*%s*(.+)'))
                 end
             end
             if currentSection then
                 table.insert(sections, currentSection)
+            end
+            echo(string.format('Changelog: parsed %d lines, %d sections', lineCount, #sections))
+            for _, s in ipairs(sections) do
+                echo(string.format('  Section v%s: %d notes', s.version, #s.notes))
             end
 
             local collected = {}
