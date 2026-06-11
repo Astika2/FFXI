@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '3.9.12'
+addon.version   = '4.0'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -217,6 +217,129 @@ local windowPosSet = false
 local showSettings = false
 local showStats = false
 local showGuide = false
+local showContest = false
+
+-- Phase durations in seconds (from fishing_contest.lua interval table)
+local CONTEST_PHASE_DURATIONS = {
+    [0] = 300,        -- Contesting  (5 min)
+    [1] = 1500,       -- Opening     (25 min)
+    [2] = 1209600,    -- Accepting   (14 days)
+    [3] = 1800,       -- Releasing   (30 min)
+    [4] = 1206000,    -- Presenting  (~13d 23h)
+    [5] = 2100,       -- Hiatus      (35 min)
+}
+local CONTEST_PHASE_NAMES = {
+    [0] = 'Contesting',
+    [1] = 'Opening',
+    [2] = 'Accepting',
+    [3] = 'Releasing',
+    [4] = 'Presenting',
+    [5] = 'Hiatus',
+    [6] = 'Closed',
+}
+local CONTEST_CRITERIA_NAMES = { [0]='Size (length)', [1]='Weight', [2]='Size + Weight' }
+local CONTEST_MEASURE_NAMES  = { [0]='Greatest',      [1]='Smallest' }
+
+-- Cached contest state. Populated by packets 0x34 + 0x5C from Chenon conversation.
+-- Saved/loaded from JSON so it persists across sessions.
+local contestCache = {
+    populated  = false,
+    status     = nil,
+    fishId     = nil,
+    criteria   = nil,
+    measure    = nil,
+    secsLeft   = nil,   -- seconds remaining in current phase at time of cache
+    cachedAt   = nil,   -- os.time() when 0x5C was received
+}
+
+-- True while we're waiting for the 0x5C after seeing a 0x34
+local contestAwaitingUpdate = false
+local contestAwaitTimeout   = 0
+
+local function contest_cache_file()
+    if not playerName or playerName == '' then return nil end
+    return settings.settings_path() .. playerName .. '-contest.json'
+end
+
+local function save_contest_cache()
+    if not contestCache.populated then return end
+    local path = contest_cache_file()
+    if not path then return end
+    local t = {
+        status   = contestCache.status,
+        fishId   = contestCache.fishId,
+        criteria = contestCache.criteria,
+        measure  = contestCache.measure,
+        secsLeft = contestCache.secsLeft,
+        cachedAt = contestCache.cachedAt,
+    }
+    local f = io.open(path, 'w')
+    if f then
+        f:write(json.encode(t))
+        f:close()
+    end
+end
+
+local function load_contest_cache()
+    local path = contest_cache_file()
+    if not path then return end
+    local f = io.open(path, 'r')
+    if not f then return end
+    local raw = f:read('*a')
+    f:close()
+    local ok, t = pcall(json.decode, raw)
+    if not ok or type(t) ~= 'table' then return end
+    contestCache.populated = true
+    contestCache.status    = t.status
+    contestCache.fishId    = t.fishId
+    contestCache.criteria  = t.criteria
+    contestCache.measure   = t.measure
+    contestCache.secsLeft  = t.secsLeft
+    contestCache.cachedAt  = t.cachedAt
+end
+
+-- Compute the projected current phase and time remaining from cached data.
+-- Returns: phaseName, secsRemaining, nextPhaseName
+-- or nil if cache not populated.
+local function get_projected_contest_state()
+    if not contestCache.populated then return nil end
+
+    local elapsed  = os.time() - contestCache.cachedAt
+    local remaining = (contestCache.secsLeft or 0) - elapsed
+
+    -- Walk forward through phases if we've passed the cached one
+    local status = contestCache.status
+    while remaining <= 0 and status ~= 6 do
+        local dur = CONTEST_PHASE_DURATIONS[status]
+        if not dur then break end
+        remaining = remaining + dur
+        status = (status + 1) % 6
+    end
+
+    local nextStatus = (status + 1) % 6
+    return
+        CONTEST_PHASE_NAMES[status]   or 'Unknown',
+        math.max(0, math.floor(remaining)),
+        CONTEST_PHASE_NAMES[nextStatus] or 'Unknown',
+        status
+end
+
+local function format_duration(secs)
+    secs = math.max(0, math.floor(secs))
+    local d = math.floor(secs / 86400)
+    local h = math.floor((secs % 86400) / 3600)
+    local m = math.floor((secs % 3600) / 60)
+    local s = secs % 60
+    if d > 0 then
+        return string.format('%dd %dh %dm', d, h, m)
+    elseif h > 0 then
+        return string.format('%dh %dm', h, m)
+    elseif m > 0 then
+        return string.format('%dm %ds', m, s)
+    else
+        return string.format('%ds', s)
+    end
+end
 local activeStatsTab = "Daily"
 local activeGuideTab = "Guide"
 local guideTabBarId = 0  -- increment to force ImGui to forget tab state
@@ -406,7 +529,7 @@ local fishingGuide = {
 	{ name = "Greedie", skill = 14, location = "Cape Teriggan, Lufaise Meadows, Misareaux Coast, Selbina, Valkurm Dunes", bait = "Minnow", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Grimmonite", skill = 90, location = "Sea Serpent Grotto", bait = "Shrimp Lure", rod = "Composite Fishing Rod", notes = "Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only.", type = "Fish" },
 	{ name = "Gugru Tuna", skill = 41, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Sinking Minnow", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Gugrusaurus", skill = 140, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Composite Fishing Rod", type = "Fish" },
+	{ name = "Gugrusaurus", skill = 140, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Composite Fishing Rod", type = "Fish", keyItem = "Serpent Rumors" },
 	{ name = "Gurnard", skill = 26, location = "Open sea route to Al Zahbi, Open sea route to Mhaura", bait = "Ball of Crayfish Paste, Slice of Sardine", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Hamsi", skill = 9, location = "Aht Urhgan Whitegate, Mount Zhayolm, Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Sabiki Rig", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Icefish", skill = 49, location = "Beaucedine Glacier", bait = "Sabiki Rig", rod = "Halcyon Rod", notes = "Beaucedine Glacier: Ponds only (not Seaside).", type = "Fish" },
@@ -421,7 +544,7 @@ local fishingGuide = {
 	{ name = "Kilicbaligi", skill = 62, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Slice of Bluetail", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Lakerda", skill = 41, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Sinking Minnow", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Lamp Marimo", skill = 3, location = "Aydeewa Subterrane", bait = "Fly Lure, Lugworm, Sabiki Rig", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Lik", skill = 140, location = "Lufaise Meadows", bait = "Minnow, Sinking Minnow, Dwarf Pugil", rod = "Composite Fishing Rod", notes = "Lufaise Meadows: Leremieu Lagoon only (not Seaside or river).", type = "Fish" },
+	{ name = "Lik", skill = 140, location = "Lufaise Meadows", bait = "Minnow, Sinking Minnow, Dwarf Pugil", rod = "Composite Fishing Rod", notes = "Lufaise Meadows: Leremieu Lagoon only (not Seaside or river).", type = "Fish", keyItem = "Serpent Rumors" },
 	{ name = "Lungfish", skill = 32, location = "Phanauet Channel", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Mercanbaligi", skill = 86, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Moat Carp", skill = 11, location = "Al Zahbi, Bastok Markets, Davoi, Dragon's Aery, East Sarutabaruta, Eastern Altepa Desert, Jugner Forest, Korroloka Tunnel, La Theine Plateau, Misareaux Coast, Northern San d'Oria, Port San d'Oria, Rabao, Rolanberry Fields, Temple of Uggalepih, The Boyahda Tree, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle, Zeruhn Mines", bait = "Ball of Insect Paste", rod = "Halcyon Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Davoi: Pond only (not waterfalls or other areas). Korroloka Tunnel: Salt Water side only.", type = "Fish" },
@@ -455,7 +578,7 @@ local fishingGuide = {
 	{ name = "Titanic Sawfish", skill = 125, location = "Manaclipper", bait = "Meatball, Slice of Cod", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Titanictus", skill = 101, location = "Manaclipper, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Tricolored Carp", skill = 27, location = "Bastok Markets, Davoi, East Ronfaure, Ghelsba Outpost, Giddeus, Gusgen Mines, Jugner Forest, North Gustaberg, Northern San d'Oria, Palborough Mines, Phanauet Channel, Port San d'Oria, The Boyahda Tree, Zeruhn Mines", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Tricorn", skill = 128, location = "Phanauet Channel", bait = "Fly Lure, Lufaise Fly", rod = "Composite Fishing Rod", type = "Fish" },
+	{ name = "Tricorn", skill = 128, location = "Phanauet Channel", bait = "Fly Lure, Lufaise Fly", rod = "Composite Fishing Rod", type = "Fish", keyItem = "Frog Fishing" },
 	{ name = "Trilobite", skill = 59, location = "Bibiki Bay, Manaclipper", bait = "Worm Lure", rod = "Halcyon Rod", notes = "Bibiki Bay: PI - South Beach and PI - North Beach only (not West/East Beach and not BB side).", type = "Fish" },
 	{ name = "Turnabaligi", skill = 104, location = "Bhaflau Thickets, Wajaom Woodlands", bait = "Shrimp Lure", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Uskumru", skill = 55, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Minnow, Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
@@ -1440,6 +1563,8 @@ ashita.events.register('load', 'load_cb', function()
     
     data.check_daily_reset()
 
+    load_contest_cache()
+
     check_for_update()
 
     -- Always write the prefs file on load so it exists even on first run.
@@ -1583,13 +1708,409 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
     end
 end)
 
+-- ============================================================
+-- FISHING CONTEST PACKET INTERCEPTOR
+-- Packet 0x34 (GP_SERV_COMMAND_EVENTNUM) carries event params.
+-- EventPara == 10006 identifies the Fish Ranking NPC conversation.
+-- Packet layout (all little-endian):
+--   bytes 01-04 : UniqueNo  (uint32)
+--   bytes 05-08 : num[0]    (int32) = status
+--   bytes 09-12 : num[1]    (int32) = fishId
+--   bytes 13-16 : num[2]    (int32) = criteria
+--   bytes 17-20 : num[3]    (int32) = measure
+--   bytes 21-24 : num[4]    (int32) = isRewardAvailable
+--   bytes 25-28 : num[5]    (int32) = days remaining
+--   bytes 29-32 : num[6]    (int32) = hours remaining
+--   bytes 33-36 : num[7]    (int32) = minutes remaining
+--   bytes 37-38 : ActIndex  (uint16)
+--   bytes 39-40 : EventNum  (uint16)
+--   bytes 41-42 : EventPara (uint16) = 10006 for fishing contest
+-- ============================================================
+local function read_int32(data, offset)
+    local b0 = string.byte(data, offset)     or 0
+    local b1 = string.byte(data, offset + 1) or 0
+    local b2 = string.byte(data, offset + 2) or 0
+    local b3 = string.byte(data, offset + 3) or 0
+    local val = b0 + b1 * 256 + b2 * 65536 + b3 * 16777216
+    -- Convert from unsigned to signed int32
+    if val >= 2147483648 then val = val - 4294967296 end
+    return val
+end
+
+local function read_uint16(data, offset)
+    local b0 = string.byte(data, offset)     or 0
+    local b1 = string.byte(data, offset + 1) or 0
+    return b0 + b1 * 256
+end
+
+ashita.events.register('packet_in', 'anglin_packet_in', function(e)
+    -- 0x34: Event start — captures status, fishId, criteria, measure
+    if e.id == 0x34 then
+        if not e.data or #e.data < 46 then return end
+        local eventPara = read_uint16(e.data, 45)
+        if eventPara ~= 10006 then return end
+        local status = read_int32(e.data, 9)
+        if status < 0 or status > 6 then return end
+        contestCache.status   = status
+        contestCache.fishId   = read_int32(e.data, 13)
+        contestCache.criteria = read_int32(e.data, 17)
+        contestCache.measure  = read_int32(e.data, 21)
+        -- Flag that we're waiting for the 0x5C with time remaining
+        contestAwaitingUpdate = true
+        contestAwaitTimeout   = os.clock() + 30
+        return
+    end
+
+    -- 0x5C: PendingNum update — carries days/hours/mins remaining
+    if e.id == 0x5C then
+        if not contestAwaitingUpdate then return end
+        if os.clock() > contestAwaitTimeout then
+            contestAwaitingUpdate = false
+            return
+        end
+        if not e.data or #e.data < 34 then return end
+        -- Only accept the first 0x5C that has a non-zero time (the "time remaining" update)
+        local days  = read_int32(e.data, 25)
+        local hours = read_int32(e.data, 29)
+        local mins  = read_int32(e.data, 33)
+        -- Guard: must match the status we got from 0x34
+        local pktStatus = read_int32(e.data, 5)
+        if pktStatus ~= contestCache.status then return end
+        -- Accept zero time too — contest may genuinely be at 0
+        local secsLeft = (days * 86400) + (hours * 3600) + (mins * 60)
+        contestCache.secsLeft   = secsLeft
+        contestCache.cachedAt   = os.time()
+        contestCache.populated  = true
+        contestAwaitingUpdate   = false
+        save_contest_cache()
+        showContest = true
+        return
+    end
+end)
+
+
+-- ============================================================
+
+-- Contest fish data sourced from fishing_fish.sql (contest=1).
+-- min_length / max_length in ilms. weight_min/max estimated from
+-- server code: weight = length * random(4.65, 5.15), so we show
+-- the theoretical range at min and max length.
+-- hour_pattern / moon_pattern descriptions from fishingutils.cpp.
+local contestFish = {
+    { id=4316, name="Armored Pisces",  skill=108, minLen=50,  maxLen=125, water="Fresh", location="Oldton Movalpolos",                                              bait="Frog Lure, Meatball, Minnow, Sinking Minnow", rod="Composite Fishing Rod", hour="No bonus",    moon="No bonus"       },
+    { id=4479, name="Bhefhel Marlin",  skill=61,  minLen=60,  maxLen=140, water="Salt",  location="Ships (Selbina/Mhaura routes)",                                  bait="Slice of Bluetail",                           rod="Composite Fishing Rod", hour="Night",        moon="New+Full Moon"  },
+    { id=4471, name="Bladefish",       skill=71,  minLen=40,  maxLen=120, water="Fresh", location="Bhaflau Thickets, Mamook, Wajaom Woodlands",                     bait="Minnow, Sinking Minnow",                      rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon"  },
+    { id=4309, name="Cave Cherax",     skill=130, minLen=115, maxLen=235, water="Fresh", location="Korroloka Tunnel",                                                bait="Minnow, Sinking Minnow",                      rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon", legendary=true },
+    { id=4454, name="Emperor Fish",    skill=91,  minLen=60,  maxLen=180, water="Fresh", location="Ru'Aun Gardens",                                                  bait="Peeled Lobster, Shrimp Lure",                 rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon"  },
+    { id=4477, name="Gavial Fish",     skill=81,  minLen=40,  maxLen=130, water="Fresh", location="Bhaflau Thickets, Mamook, Wajaom Woodlands",                     bait="Meatball, Minnow",                            rod="Composite Fishing Rod", hour="No bonus",    moon="New Moon"       },
+    { id=4469, name="Giant Catfish",   skill=31,  minLen=40,  maxLen=130, water="Fresh", location="Jugner Forest, Pashhow Marshlands, Rolanberry Fields",            bait="Minnow, Sinking Minnow",                      rod="Halcyon Rod",           hour="High Tide",   moon="New+Full Moon"  },
+    { id=4308, name="Giant Chirai",    skill=110, minLen=75,  maxLen=170, water="Fresh", location="Aht Urhgan Whitegate (waterway)",                                 bait="Minnow, Sinking Minnow",                      rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon", legendary=true },
+    { id=4306, name="Giant Donko",     skill=50,  minLen=45,  maxLen=150, water="Fresh", location="Bastok Mines, Bastok Markets, North Gustaberg",                   bait="Minnow, Sinking Minnow",                      rod="Halcyon Rod",           hour="No bonus",    moon="New Moon"       },
+    { id=4474, name="Gigant Squid",    skill=91,  minLen=80,  maxLen=170, water="Salt",  location="Bibiki Bay, Manaclipper",                                         bait="Peeled Lobster",                              rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon"  },
+    { id=4304, name="Grimmonite",      skill=90,  minLen=55,  maxLen=145, water="Fresh", location="Carpenter's Landing, Jugner Forest, Meriphataud Mountains",       bait="Fly Lure",                                    rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon"  },
+    { id=4480, name="Gugru Tuna",      skill=41,  minLen=40,  maxLen=120, water="Salt",  location="Bibiki Bay, Manaclipper",                                         bait="Sabiki Rig",                                  rod="Composite Fishing Rod", hour="New+Full Moon", moon="No bonus"     },
+    { id=5127, name="Gugrusaurus",     skill=140, minLen=145, maxLen=425, water="Salt",  location="Ships (Selbina/Mhaura routes, with Pirates), Open sea routes",    bait="Meatball",                                    rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon", legendary=true, keyItem="Serpent Rumors" },
+    { id=4307, name="Jungle Catfish",  skill=80,  minLen=40,  maxLen=110, water="Fresh", location="Bhaflau Thickets, Mamook, Wajaom Woodlands",                     bait="Minnow, Sinking Minnow",                      rod="Composite Fishing Rod", hour="High Tide",   moon="New+Full Moon"  },
+    { id=5129, name="Lik",             skill=140, minLen=185, maxLen=465, water="Fresh", location="Lufaise Meadows (Leremieu Lagoon only)",                          bait="Minnow, Sinking Minnow, Dwarf Pugil",         rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon", legendary=true, keyItem="Serpent Rumors" },
+    { id=4462, name="Monke-Onke",      skill=51,  minLen=45,  maxLen=115, water="Fresh", location="Jugner Forest, Meriphataud Mountains, Sauromugue Champaign",      bait="Minnow, Sinking Minnow",                      rod="Halcyon Rod",           hour="No bonus",    moon="New+Full Moon"  },
+    { id=4305, name="Ryugu Titan",     skill=150, minLen=200, maxLen=490, water="Salt",  location="Bibiki Bay (BB side piers)",                                      bait="Peeled Lobster",                              rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon", legendary=true },
+    { id=4475, name="Sea Zombie",      skill=100, minLen=80,  maxLen=195, water="Salt",  location="Caedarva Mire, Arrapago Reef",                                    bait="Peeled Lobster, Shrimp Lure",                 rod="Composite Fishing Rod", hour="High Tide",   moon="New+Full Moon", legendary=true },
+    { id=4463, name="Takitaro",        skill=101, minLen=55,  maxLen=130, water="Fresh", location="Beaucedine Glacier, Fei'Yin, Ranguemont Pass, Uleguerand Range",  bait="Minnow, Sinking Minnow",                      rod="Composite Fishing Rod", hour="No bonus",    moon="New Moon"       },
+    { id=4478, name="Three-Eyed Fish", skill=79,  minLen=50,  maxLen=120, water="Fresh", location="Al'Taieu, Ru'Aun Gardens, Grand Palace of Hu'Xzoi",               bait="Minnow, Sinking Minnow",                      rod="Composite Fishing Rod", hour="No bonus",    moon="New Moon"       },
+    { id=5120, name="Titanic Sawfish", skill=125, minLen=75,  maxLen=210, water="Salt",  location="Bibiki Bay (BB side), Manaclipper",                               bait="Peeled Lobster, Shrimp Lure",                 rod="Composite Fishing Rod", hour="No bonus",    moon="New+Full Moon", legendary=true },
+    { id=4476, name="Titanictus",      skill=101, minLen=75,  maxLen=210, water="Salt",  location="Caedarva Mire, Arrapago Reef",                                    bait="Peeled Lobster, Shrimp Lure",                 rod="Composite Fishing Rod", hour="No bonus",    moon="New Moon",      legendary=true },
+    { id=4319, name="Tricorn",         skill=128, minLen=105, maxLen=210, water="Fresh", location="Phanauet Channel",                                                bait="Fly Lure, Lufaise Fly",                       rod="Composite Fishing Rod", hour="No bonus",    moon="New Moon",      legendary=true, keyItem="Frog Fishing" },
+}
+
+-- Build lookup by item ID for fast inventory scanning
+local contestFishById = {}
+for _, cf in ipairs(contestFish) do
+    contestFishById[cf.id] = cf
+end
+
+-- ItemType::Fish = 3 (Ashita SDK enums.h)
+local ITEM_TYPE_FISH = 3
+
+-- Read fish length/weight from item Extra bytes (confirmed byte layout).
+-- Returns { length, weight, isRanked } or nil if not a sized fish.
+local function read_fish_exdata(item)
+    if not item or type(item.Extra) ~= 'string' or #item.Extra < 5 then return nil end
+    local length = (string.byte(item.Extra, 1) or 0) + ((string.byte(item.Extra, 2) or 0) * 256)
+    local weight = (string.byte(item.Extra, 3) or 0) + ((string.byte(item.Extra, 4) or 0) * 256)
+    local isRanked = ((string.byte(item.Extra, 5) or 0) % 2) == 1
+    if length == 0 then return nil end
+    return { length=length, weight=weight, isRanked=isRanked }
+end
+
+-- Scan inventory for sized fish and update personal bests.
+-- Called after each catch event (container update).
+local function scan_for_personal_bests()
+    local inv = AshitaCore:GetMemoryManager():GetInventory()
+    local res = AshitaCore:GetResourceManager()
+    if not inv or not res then return end
+
+    for container = 0, 12 do
+        for slot = 0, 80 do
+            local item = inv:GetContainerItem(container, slot)
+            if item and item.Id and item.Id > 0 then
+                local resItem = res:GetItemById(item.Id)
+                if resItem and resItem.Type == ITEM_TYPE_FISH then
+                    local exdata = read_fish_exdata(item)
+                    if exdata then
+                        local name = (resItem.Name and resItem.Name[1]) or tostring(item.Id)
+                        local isNew = data.record_personal_best(name, exdata.length, exdata.weight)
+                        if isNew then
+                            echo(string.format(
+                                "New personal best! %s: %d ilms / %d weight",
+                                name, exdata.length, exdata.weight))
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Track container update counter to detect inventory changes
+local lastContainerUpdate = 0
+
+-- Estimate weight range from length range (server formula: length * 4.65 to 5.15)
+local function est_weight(length)
+    return math.floor(length * 4.65), math.floor(length * 5.15)
+end
+
+-- ============================================================
+-- Contest window renderer
+-- ============================================================
+local function render_contest_window()
+    if not showContest then return end
+
+    local inv = AshitaCore:GetMemoryManager():GetInventory()
+    if inv then
+        local cu = inv:GetContainerUpdateCounter()
+        if cu ~= lastContainerUpdate then
+            lastContainerUpdate = cu
+            scan_for_personal_bests()
+        end
+    end
+
+    imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
+    imgui.PushStyleVar(ImGuiStyleVar_FrameRounding, 4)
+    imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 12, 12 })
+    imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(pref_Transparency))
+    imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
+    imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
+    imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
+
+    imgui.SetNextWindowSize({ 580, 560 }, ImGuiCond_FirstUseEver)
+    local contestOpen = { showContest }
+    if imgui.Begin("Fishing Contest##anglin_contest", contestOpen) then
+        showContest = contestOpen[1]
+        push_font()
+
+        -- --------------------------------------------------------
+        -- LIVE PHASE STATUS PANEL
+        -- --------------------------------------------------------
+        local phaseName, secsRemaining, nextPhaseName, currentStatus = get_projected_contest_state()
+
+        if phaseName then
+            -- Phase status box
+            imgui.PushStyleColor(ImGuiCol_ChildBg, getBackgroundColor(0.6))
+            if imgui.BeginChild("ContestStatus", { 0, 95 }, true) then
+
+                -- Current phase
+                imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
+                imgui.TextUnformatted("Current Phase:")
+                imgui.PopStyleColor()
+                imgui.SameLine()
+                imgui.PushStyleColor(ImGuiCol_Text, Colors.Primary)
+                imgui.TextUnformatted(phaseName)
+                imgui.PopStyleColor()
+
+                -- Time remaining
+                imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
+                imgui.TextUnformatted("Time Remaining:")
+                imgui.PopStyleColor()
+                imgui.SameLine()
+                imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                imgui.TextUnformatted(secsRemaining > 0 and format_duration(secsRemaining) or "Phase ending soon")
+                imgui.PopStyleColor()
+
+                -- Next phase
+                imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
+                imgui.TextUnformatted("Next Phase:")
+                imgui.PopStyleColor()
+                imgui.SameLine()
+                imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+                imgui.TextUnformatted(nextPhaseName)
+                imgui.PopStyleColor()
+
+                -- Current fish + contest details (only during Accepting/Presenting)
+                if currentStatus == 2 or currentStatus == 4 then
+                    imgui.Separator()
+                    local res = AshitaCore:GetResourceManager()
+                    local fishName = "Unknown"
+                    if contestCache.fishId and contestCache.fishId > 0 then
+                        local resItem = res:GetItemById(contestCache.fishId)
+                        if resItem and resItem.Name then
+                            fishName = resItem.Name[1] or fishName
+                        end
+                    end
+                    local criteriaStr = CONTEST_CRITERIA_NAMES[contestCache.criteria] or "?"
+                    local measureStr  = CONTEST_MEASURE_NAMES[contestCache.measure]   or "?"
+                    imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
+                    imgui.TextUnformatted("Current Fish:")
+                    imgui.PopStyleColor()
+                    imgui.SameLine()
+                    imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                    imgui.TextUnformatted(string.format("%s  [%s / %s]", fishName, criteriaStr, measureStr))
+                    imgui.PopStyleColor()
+                end
+
+                imgui.EndChild()
+            end
+            imgui.PopStyleColor()
+
+            -- Stale data warning
+            if contestCache.cachedAt then
+                local staleSecs = os.time() - contestCache.cachedAt
+                if staleSecs > 86400 then
+                    imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                    imgui.TextUnformatted(string.format("(Last synced %s ago — visit Chenon to refresh)", format_duration(staleSecs)))
+                    imgui.PopStyleColor()
+                end
+            end
+        else
+            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+            imgui.TextWrapped("No contest data yet. Talk to Chenon in Selbina to sync.")
+            imgui.PopStyleColor()
+        end
+
+        drawSection()
+
+        -- Legend
+        imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+        imgui.TextUnformatted("[L]egendary  [KI] Key Item Required  [S]alt  [F]resh")
+        imgui.PopStyleColor()
+        imgui.Spacing()
+
+        -- --------------------------------------------------------
+        -- CONTEST FISH LIST
+        -- --------------------------------------------------------
+        if imgui.BeginChild("ContestList", { 0, -40 }, false) then
+            for _, cf in ipairs(contestFish) do
+                local pb = data.state.personalBests and data.state.personalBests[cf.name]
+
+                -- Highlight the active contest fish
+                local isActive = contestCache.populated and contestCache.fishId == cf.id
+                    and (currentStatus == 2 or currentStatus == 4)
+                local rowColor = isActive and Colors.Warning
+                             or (pb and Colors.Success or Colors.TextSecondary)
+                imgui.PushStyleColor(ImGuiCol_Text, rowColor)
+
+                local tags = ""
+                if cf.legendary then tags = tags .. "[L]" end
+                if cf.keyItem   then tags = tags .. "[KI]" end
+                if isActive     then tags = tags .. " [ACTIVE]" end
+                local waterTag = cf.water == "Salt" and "[S]" or "[F]"
+                local headerLabel = string.format("%s %s%s  (Skill: %d)", cf.name, waterTag, tags, cf.skill)
+
+                if imgui.CollapsingHeader(headerLabel) then
+                    imgui.Indent()
+                    imgui.PopStyleColor()
+
+                    local wMin, _    = est_weight(cf.minLen)
+                    local _,    wMax = est_weight(cf.maxLen)
+                    drawColoredText("Length Range:", string.format("%d - %d ilms", cf.minLen, cf.maxLen), Colors.Primary)
+                    drawColoredText("Weight Range:", string.format("~%d - ~%d", wMin, wMax), Colors.Primary)
+
+                    if pb then
+                        imgui.PushStyleColor(ImGuiCol_Text, Colors.Success)
+                        imgui.TextUnformatted(string.format(
+                            "Personal Best:  %d ilms / %d weight  (%.1f%% of max length)",
+                            pb.length, pb.weight, (pb.length / cf.maxLen) * 100))
+                        imgui.PopStyleColor()
+                    else
+                        imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                        imgui.TextUnformatted("Personal Best:  None recorded yet")
+                        imgui.PopStyleColor()
+                    end
+
+                    imgui.Separator()
+                    imgui.TextWrapped(string.format("Location: %s", cf.location))
+                    imgui.TextWrapped(string.format("Bait/Lure: %s", cf.bait))
+                    imgui.TextUnformatted(string.format("Rod: %s", cf.rod))
+                    imgui.Separator()
+                    drawColoredText("Best Hour:", cf.hour, Colors.Accent)
+                    drawColoredText("Best Moon:", cf.moon, Colors.Accent)
+
+                    if cf.keyItem then
+                        imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                        imgui.TextUnformatted(string.format("[KEY ITEM REQUIRED] %s", cf.keyItem))
+                        imgui.PopStyleColor()
+                    end
+
+                    imgui.Unindent()
+                    imgui.Spacing()
+                else
+                    imgui.PopStyleColor()
+
+                    if imgui.IsItemHovered() then
+                        imgui.BeginTooltip()
+                        imgui.PushTextWrapPos(imgui.GetFontSize() * 28)
+                        imgui.PushStyleColor(ImGuiCol_Text, Colors.Primary)
+                        imgui.TextUnformatted(cf.name)
+                        imgui.PopStyleColor()
+                        imgui.Separator()
+                        local wLo, _ = est_weight(cf.minLen)
+                        local _, wHi = est_weight(cf.maxLen)
+                        imgui.TextUnformatted(string.format("Length: %d - %d ilms", cf.minLen, cf.maxLen))
+                        imgui.TextUnformatted(string.format("Est. Weight: ~%d - ~%d", wLo, wHi))
+                        if pb then
+                            imgui.Separator()
+                            imgui.PushStyleColor(ImGuiCol_Text, Colors.Success)
+                            imgui.TextUnformatted(string.format("Your Best: %d ilms / %d weight (%.1f%% of max)",
+                                pb.length, pb.weight, (pb.length / cf.maxLen) * 100))
+                            imgui.PopStyleColor()
+                        end
+                        if cf.keyItem then
+                            imgui.Separator()
+                            imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                            imgui.TextUnformatted(string.format("Key Item Required: %s", cf.keyItem))
+                            imgui.PopStyleColor()
+                        end
+                        imgui.TextUnformatted(string.format("Best Hour: %s  |  Best Moon: %s", cf.hour, cf.moon))
+                        imgui.PopTextWrapPos()
+                        imgui.EndTooltip()
+                    end
+                end
+            end
+            imgui.EndChild()
+        end
+
+        imgui.Spacing()
+        if modernButton("Close", -1, 30) then
+            showContest = false
+        end
+
+        pop_font()
+        imgui.End()
+    else
+        showContest = contestOpen[1]
+    end
+
+    imgui.PopStyleVar(3)
+    imgui.PopStyleColor(4)
+end
+
+
 ashita.events.register('command', 'anglin_command', function(e)
     local args = e.command:args()
     if (#args == 0 or args[1]:lower() ~= '/anglin') then return end
     e.blocked = true
 
     if (#args == 1) then
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin suggest | /anglin update')
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin suggest | /anglin contest | /anglin update')
         return
     end
 
@@ -1634,6 +2155,12 @@ ashita.events.register('command', 'anglin_command', function(e)
 
     elseif subcmd == 'update' then
         perform_update()
+
+    elseif subcmd == 'contest' then
+        showContest = not showContest
+        if not pref_SilentToggle then
+            AshitaCore:GetChatManager():QueueCommand(1, '/echo Contest window toggled.')
+        end
 
     else
         AshitaCore:GetChatManager():QueueCommand(1,
@@ -1756,7 +2283,8 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     local skillStr = fish.skill > 0 and string.format(" (Skill: %d)", fish.skill) or ""
                     local typeTag = fish.type == "Monster" and " [MOB]" or (fish.type == "Item" and " [ITEM]" or "")
-                    local displayName = fish.name .. typeTag .. skillStr
+                    local kiTag = fish.keyItem and " [KI]" or ""
+                    local displayName = fish.name .. typeTag .. kiTag .. skillStr
                     if not caught then
                         imgui.PushStyleColor(ImGuiCol_Text, Colors.UncaughtColor)
                     else
@@ -1812,6 +2340,11 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                             imgui.TextWrapped(fish.notes)
                             imgui.PopStyleColor()
                         end
+                        if fish.keyItem then
+                            imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                            imgui.TextUnformatted(string.format("[KEY ITEM REQUIRED] %s", fish.keyItem))
+                            imgui.PopStyleColor()
+                        end
                         imgui.Unindent()
                         imgui.Spacing()
                     end
@@ -1850,6 +2383,12 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                             imgui.TextUnformatted("Notes:")
                             imgui.PopStyleColor()
                             imgui.TextWrapped(fish.notes)
+                        end
+                        if fish.keyItem then
+                            imgui.Separator()
+                            imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                            imgui.TextUnformatted(string.format("Key Item Required: %s", fish.keyItem))
+                            imgui.PopStyleColor()
                         end
                         imgui.PopTextWrapPos()
                         imgui.EndTooltip()
@@ -2466,6 +3005,8 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         imgui.PopStyleVar(3)
         imgui.PopStyleColor(4)
 	end
+
+    render_contest_window()
 
     local previewMode = showSettings and not state.Active
     if not state.Active and not previewMode then return end

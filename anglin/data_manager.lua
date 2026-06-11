@@ -30,7 +30,10 @@ local state = {
         baitLost = {},
         lureLost = {},
         rodBreaks = {},
-    }
+    },
+    -- Personal best lengths per fish name (for contest window).
+    -- Keyed by item name string, value is { length, weight } of best catch.
+    personalBests = {},
 }
 
 -- ==============================
@@ -58,6 +61,7 @@ end
 
 local dailyFile    = nil
 local lifetimeFile = nil
+local personalbestsFile = nil
 
 -- ==============================
 -- Daily reset callback (to be set by main addon)
@@ -121,11 +125,13 @@ local function update_file_paths(playerName)
 
     -- New-location filenames (flat, in the same folder as settings.lua)
     if not playerName or playerName == '' then
-        dailyFile    = newPath .. 'daily.json'
-        lifetimeFile = newPath .. 'lifetime.json'
+        dailyFile         = newPath .. 'daily.json'
+        lifetimeFile      = newPath .. 'lifetime.json'
+        personalbestsFile = newPath .. 'personalbests.json'
     else
-        dailyFile    = newPath .. playerName .. '-daily.json'
-        lifetimeFile = newPath .. playerName .. '-lifetime.json'
+        dailyFile         = newPath .. playerName .. '-daily.json'
+        lifetimeFile      = newPath .. playerName .. '-lifetime.json'
+        personalbestsFile = newPath .. playerName .. '-personalbests.json'
     end
 
     -- Old-location filenames (original flat folder under addons\anglin\data\)
@@ -245,6 +251,9 @@ local function ensure_tables()
     state.lifetime.baitLost     = state.lifetime.baitLost     or {}
     state.lifetime.lureLost     = state.lifetime.lureLost     or {}
     state.lifetime.rodBreaks    = state.lifetime.rodBreaks    or {}
+
+    -- Personal bests (contest fishing)
+    state.personalBests = state.personalBests or {}
 end
 
 -- ==============================
@@ -307,6 +316,10 @@ local function save_state()
     ensure_tables()
     save_json_sorted_pretty(dailyFile, state.daily)
     save_json_sorted_pretty(lifetimeFile, state.lifetime)
+    -- Personal bests saved to its own file alongside the others
+    if personalbestsFile then
+        save_json_sorted_pretty(personalbestsFile, state.personalBests)
+    end
 end
 
 -- ==============================
@@ -325,6 +338,11 @@ local function load_state()
 
     local lifetimeData = load_json(lifetimeFile)
     if lifetimeData then state.lifetime = lifetimeData end
+
+    if personalbestsFile then
+        local pbData = load_json(personalbestsFile)
+        if pbData then state.personalBests = pbData end
+    end
 
     ensure_tables()
 end
@@ -474,6 +492,24 @@ local function record_rod_break(name)
 end
 
 -- ==============================
+-- Record a personal best length/weight for a fish.
+-- Only updates if the new length is strictly greater than the stored best.
+-- length and weight are integers read from item Extra bytes.
+-- ==============================
+local function record_personal_best(fishName, length, weight)
+    initialize_player_data()
+    if not fishName or not length or length <= 0 then return false end
+    state.personalBests = state.personalBests or {}
+    local current = state.personalBests[fishName]
+    if not current or length > current.length then
+        state.personalBests[fishName] = { length = length, weight = weight }
+        save_state()
+        return true  -- new record
+    end
+    return false  -- no improvement
+end
+
+-- ==============================
 -- Expose functions
 -- ==============================
 data.state = state
@@ -489,6 +525,7 @@ data.record_bait_consumed = record_bait_consumed
 data.record_bait_lost = record_bait_lost
 data.record_lure_lost = record_lure_lost
 data.record_rod_break = record_rod_break
+data.record_personal_best = record_personal_best
 data.initialize_player_data = initialize_player_data
 data.set_daily_reset_callback = set_daily_reset_callback
 data.check_file_permissions = check_file_permissions
