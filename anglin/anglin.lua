@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0'
+addon.version   = '4.0.1'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1382,19 +1382,21 @@ local function perform_update()
         local cok, cbody, ccode = pcall(function()
             return https.request(UPDATE_CHANGELOG_URL .. '?t=' .. os.time())
         end)
+        echo(string.format('Changelog fetch: ok=%s code=%s bodylen=%s', tostring(cok), tostring(ccode), cbody and tostring(#cbody) or 'nil'))
         if cok and ccode == 200 and cbody then
-            -- Find the section for the new version and print its bullet points
             local inSection = false
             local notes = {}
             for line in cbody:gmatch('[^\r\n]+') do
                 if line:match('^##%s+v?' .. remote:gsub('%.', '%%.')) then
                     inSection = true
+                    echo('Changelog: found section for v' .. remote)
                 elseif line:match('^##%s+') and inSection then
                     break
                 elseif inSection and line:match('^%s*%-') then
                     table.insert(notes, '  ' .. line:match('^%s*(.+)'))
                 end
             end
+            echo(string.format('Changelog: found %d notes', #notes))
             if #notes > 0 then
                 table.insert(messages, string.format("What's new in v%s:", remote))
                 for _, note in ipairs(notes) do
@@ -1571,6 +1573,7 @@ ashita.events.register('load', 'load_cb', function()
         load_prefs()
         apply_prefs()
         save_prefs()
+        load_contest_cache()
     end)
     -- Also run immediately in case the player is already logged in.
     load_prefs()
@@ -1590,8 +1593,6 @@ ashita.events.register('load', 'load_cb', function()
     data.init(playerName)
     
     data.check_daily_reset()
-
-    load_contest_cache()
 
     check_for_update()
 
@@ -1901,6 +1902,7 @@ end
 
 -- Track container update counter to detect inventory changes
 local lastContainerUpdate = 0
+local contestCacheLoadAttempted = false
 
 -- Estimate weight range from length range (server formula: length * 4.65 to 5.15)
 local function est_weight(length)
@@ -2198,6 +2200,14 @@ ashita.events.register('command', 'anglin_command', function(e)
 end)
 
 ashita.events.register('d3d_present', 'anglin_render', function()
+    -- Load contest cache as soon as playerName becomes available (may not be ready on login)
+    if not contestCacheLoadAttempted and playerName and playerName ~= '' then
+        contestCacheLoadAttempted = true
+        if not contestCache.populated then
+            load_contest_cache()
+        end
+    end
+
     if updateMessageDelay and os.clock() >= updateMessageDelay then
         echo(string.format(
             'Update available! Current: v%s  Latest: v%s  --  Type /anglin update to install.',
