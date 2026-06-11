@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.1'
+addon.version   = '4.0.2'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1254,6 +1254,23 @@ local UPDATE_FILES = {
 local updateAvailable = false
 local latestVersion   = nil
 
+local function parse_ver(v)
+    local parts = {}
+    for n in v:gmatch('%d+') do table.insert(parts, tonumber(n)) end
+    return parts
+end
+
+local function ver_gt(a, b)
+    local pa, pb = parse_ver(a), parse_ver(b)
+    for i = 1, math.max(#pa, #pb) do
+        local ai = pa[i] or 0
+        local bi = pb[i] or 0
+        if ai > bi then return true end
+        if ai < bi then return false end
+    end
+    return false
+end
+
 local function echo(msg)
     AshitaCore:GetChatManager():QueueCommand(1, '/echo [Anglin] ' .. msg)
 end
@@ -1278,25 +1295,6 @@ local function check_for_update()
     if not CURRENT_VERSION or CURRENT_VERSION == '' then return end
 
     latestVersion = remote
-
-    local function parse_ver(v)
-        local parts = {}
-        for n in v:gmatch('%d+') do
-            table.insert(parts, tonumber(n))
-        end
-        return parts
-    end
-
-    local function ver_gt(a, b)
-        local pa, pb = parse_ver(a), parse_ver(b)
-        for i = 1, math.max(#pa, #pb) do
-            local ai = pa[i] or 0
-            local bi = pb[i] or 0
-            if ai > bi then return true end
-            if ai < bi then return false end
-        end
-        return false
-    end
 
     if ver_gt(remote, CURRENT_VERSION) then
         updateAvailable = true
@@ -1326,29 +1324,13 @@ local function perform_update()
 
     latestVersion = remote
 
-    local function parse_ver(v)
-        local parts = {}
-        for n in v:gmatch('%d+') do table.insert(parts, tonumber(n)) end
-        return parts
-    end
-
-    local function ver_gt(a, b)
-        local pa, pb = parse_ver(a), parse_ver(b)
-        for i = 1, math.max(#pa, #pb) do
-            local ai = pa[i] or 0
-            local bi = pb[i] or 0
-            if ai > bi then return true end
-            if ai < bi then return false end
-        end
-        return false
-    end
-
     if not ver_gt(remote, CURRENT_VERSION) then
         echo(string.format('Already up to date. (v%s)', CURRENT_VERSION))
         return
     end
 
     local allOk = true
+    local previousVersion = CURRENT_VERSION  -- capture before files are overwritten
     local messages = { string.format('Downloading v%s...', remote) }
 
     for _, f in ipairs(UPDATE_FILES) do
@@ -1378,29 +1360,44 @@ local function perform_update()
         updateAvailable = false
         updateMessageDelay = nil
 
-        -- Fetch and display changelog for the new version
+        -- Fetch changelog and show all versions newer than what the player had
         local cok, cbody, ccode = pcall(function()
             return https.request(UPDATE_CHANGELOG_URL .. '?t=' .. os.time())
         end)
-        echo(string.format('Changelog fetch: ok=%s code=%s bodylen=%s', tostring(cok), tostring(ccode), cbody and tostring(#cbody) or 'nil'))
         if cok and ccode == 200 and cbody then
-            local inSection = false
-            local notes = {}
+            -- Parse all sections out of the changelog
+            local sections = {}  -- ordered list of { version, notes }
+            local currentSection = nil
             for line in cbody:gmatch('[^\r\n]+') do
-                if line:match('^##%s+v?' .. remote:gsub('%.', '%%.')) then
-                    inSection = true
-                    echo('Changelog: found section for v' .. remote)
-                elseif line:match('^##%s+') and inSection then
-                    break
-                elseif inSection and line:match('^%s*%-') then
-                    table.insert(notes, '  ' .. line:match('^%s*(.+)'))
+                local ver = line:match('^##%s+v?([%d%.]+)')
+                if ver then
+                    if currentSection then
+                        table.insert(sections, currentSection)
+                    end
+                    currentSection = { version = ver, notes = {} }
+                elseif currentSection and line:match('^%s*%-') then
+                    table.insert(currentSection.notes, '  ' .. line:match('^%s*(.+)'))
                 end
             end
-            echo(string.format('Changelog: found %d notes', #notes))
-            if #notes > 0 then
-                table.insert(messages, string.format("What's new in v%s:", remote))
-                for _, note in ipairs(notes) do
-                    table.insert(messages, note)
+            if currentSection then
+                table.insert(sections, currentSection)
+            end
+
+            -- Collect sections newer than the pre-update version
+            local collected = {}
+            for _, section in ipairs(sections) do
+                if ver_gt(section.version, previousVersion) then
+                    table.insert(collected, section)
+                end
+            end
+
+            if #collected > 0 then
+                table.insert(messages, string.format("Changes since v%s:", previousVersion))
+                for _, section in ipairs(collected) do
+                    table.insert(messages, string.format("  v%s:", section.version))
+                    for _, note in ipairs(section.notes) do
+                        table.insert(messages, note)
+                    end
                 end
             end
         end
@@ -1594,8 +1591,6 @@ ashita.events.register('load', 'load_cb', function()
     
     data.check_daily_reset()
 
-    check_for_update()
-
     -- Always write the prefs file on load so it exists even on first run.
     save_prefs()
 end)
@@ -1618,6 +1613,11 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
     
     local msg = e.message
     local cleanMsg = msg:gsub("|[cC]%x+|", ""):gsub("[%z\1-\31\127]", "")
+
+    -- Trigger update check when the server welcome message appears
+    if cleanMsg:find('Welcome to HorizonXI', 1, true) then
+        check_for_update()
+    end
 
     for _, entry in ipairs(hookMessages) do
         if cleanMsg:find(entry.message, 1, true) then
@@ -2200,12 +2200,15 @@ ashita.events.register('command', 'anglin_command', function(e)
 end)
 
 ashita.events.register('d3d_present', 'anglin_render', function()
-    -- Load contest cache as soon as playerName becomes available (may not be ready on login)
+    -- Load contest cache and run update check as soon as playerName becomes available
     if not contestCacheLoadAttempted and playerName and playerName ~= '' then
         contestCacheLoadAttempted = true
         if not contestCache.populated then
             load_contest_cache()
         end
+        -- Check for updates in case addon was loaded manually after login
+        -- (welcome message trigger won't fire in this case)
+        check_for_update()
     end
 
     if updateMessageDelay and os.clock() >= updateMessageDelay then
