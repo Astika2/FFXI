@@ -1,3 +1,6 @@
+## v4.0.1
+- Corrected when the fishing contest data is loaded on client start so that data populates properly without having to reload addon.
+
 ## v4.0
 - Added Fishing Contest window (/anglin contest)
 - Contest window shows live phase countdown, current fish, criteria, and measure
