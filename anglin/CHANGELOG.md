@@ -7,6 +7,7 @@
 - Personal best tracking: length and weight recorded automatically when sized fish are in inventory
 - Added key item requirement indicators to Fishing Guide
 - Auto-update now displays change notes in chat after a successful update
+- Just wanted to say thanks for trying this addon out. Hope it helps you!
 
 ## v3.9.12
 - Updated for ToAU content
