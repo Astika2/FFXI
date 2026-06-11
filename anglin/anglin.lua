@@ -1334,6 +1334,8 @@ local function perform_update()
     local allOk = true
     local previousVersion = CURRENT_VERSION  -- capture before files are overwritten
     local messages = { string.format('Downloading v%s...', remote) }
+    changelogMessages = nil
+    changelogDelay    = nil
 
     for _, f in ipairs(UPDATE_FILES) do
         local fok, fbody, fcode = pcall(function()
@@ -1372,13 +1374,11 @@ local function perform_update()
         local cok, cbody, ccode = pcall(function()
             return https.request(UPDATE_CHANGELOG_URL .. '?t=' .. os.time())
         end)
-        echo(string.format('CL fetch: ok=%s code=%s len=%s', tostring(cok), tostring(ccode), cbody and tostring(#cbody) or 'nil'))
         if cok and ccode == 200 and cbody then
             -- Parse all sections from changelog
             -- Format: "VERSION X.X.X" header lines, "* note" bullet lines
             local sections = {}
             local currentSection = nil
-            local lineCount = 0
             for line in cbody:gmatch('[^\r\n]+') do
                 local cleanLine = line:gsub('\r', '')
                 lineCount = lineCount + 1
@@ -1394,10 +1394,6 @@ local function perform_update()
             end
             if currentSection then
                 table.insert(sections, currentSection)
-            end
-            echo(string.format('Changelog: parsed %d lines, %d sections', lineCount, #sections))
-            for _, s in ipairs(sections) do
-                echo(string.format('  Section v%s: %d notes', s.version, #s.notes))
             end
 
             local collected = {}
