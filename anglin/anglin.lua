@@ -1376,14 +1376,15 @@ local function perform_update()
             local sections = {}
             local currentSection = nil
             for line in cbody:gmatch('[^\r\n]+') do
-                local ver = line:match('^##%s+v?([%d%.]+)%s*$')
+                local cleanLine = line:gsub('\r', '')
+                local ver = cleanLine:match('^##%s+v?([%d%.]+)%s*$')
                 if ver then
                     if currentSection then
                         table.insert(sections, currentSection)
                     end
                     currentSection = { version = ver, notes = {} }
-                elseif currentSection and line:match('^%s*%-') then
-                    table.insert(currentSection.notes, '  ' .. line:match('^%s*(.+)'))
+                elseif currentSection and cleanLine:match('^%s*%-') then
+                    table.insert(currentSection.notes, '  ' .. cleanLine:match('^%s*(.+)'))
                 end
             end
             if currentSection then
