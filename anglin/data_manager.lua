@@ -492,21 +492,40 @@ local function record_rod_break(name)
 end
 
 -- ==============================
--- Record a personal best length/weight for a fish.
--- Only updates if the new length is strictly greater than the stored best.
+-- Record personal bests for a fish across four categories:
+-- longest, shortest, heaviest, lightest.
+-- Returns a table of which records were broken (may be empty).
 -- length and weight are integers read from item Extra bytes.
 -- ==============================
 local function record_personal_best(fishName, length, weight)
     initialize_player_data()
-    if not fishName or not length or length <= 0 then return false end
+    if not fishName or not length or length <= 0 then return {} end
     state.personalBests = state.personalBests or {}
-    local current = state.personalBests[fishName]
-    if not current or length > current.length then
-        state.personalBests[fishName] = { length = length, weight = weight }
-        save_state()
-        return true  -- new record
+    local current = state.personalBests[fishName] or {}
+    local newRecords = {}
+
+    if not current.longest or length > current.longest.length then
+        current.longest  = { length = length, weight = weight }
+        newRecords[#newRecords + 1] = "longest"
     end
-    return false  -- no improvement
+    if not current.shortest or length < current.shortest.length then
+        current.shortest = { length = length, weight = weight }
+        newRecords[#newRecords + 1] = "shortest"
+    end
+    if not current.heaviest or weight > current.heaviest.weight then
+        current.heaviest = { length = length, weight = weight }
+        newRecords[#newRecords + 1] = "heaviest"
+    end
+    if not current.lightest or weight < current.lightest.weight then
+        current.lightest = { length = length, weight = weight }
+        newRecords[#newRecords + 1] = "lightest"
+    end
+
+    if #newRecords > 0 then
+        state.personalBests[fishName] = current
+        save_state()
+    end
+    return newRecords
 end
 
 -- ==============================

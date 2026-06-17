@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.2'
+addon.version   = '4.0.3'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1898,11 +1898,12 @@ local function scan_for_personal_bests()
                     local exdata = read_fish_exdata(item)
                     if exdata then
                         local name = (resItem.Name and resItem.Name[1]) or tostring(item.Id)
-                        local isNew = data.record_personal_best(name, exdata.length, exdata.weight)
-                        if isNew then
+                        local newRecords = data.record_personal_best(name, exdata.length, exdata.weight)
+                        if #newRecords > 0 then
                             echo(string.format(
-                                "New personal best! %s: %d ilms / %d weight",
-                                name, exdata.length, exdata.weight))
+                                "New personal best! %s: %d ilms / %d Pz  [%s]",
+                                name, exdata.length, exdata.weight,
+                                table.concat(newRecords, ", ")))
                         end
                     end
                 end
@@ -2067,10 +2068,32 @@ local function render_contest_window()
 
                     if pb then
                         imgui.PushStyleColor(ImGuiCol_Text, Colors.Success)
-                        imgui.TextUnformatted(string.format(
-                            "Personal Best:  %d ilms / %d weight  (%.1f%% of max length)",
-                            pb.length, pb.weight, (pb.length / cf.maxLen) * 100))
+                        imgui.TextUnformatted("Personal Bests:")
                         imgui.PopStyleColor()
+                        if pb.longest then
+                            imgui.TextUnformatted(string.format(
+                                "  Longest:   %d ilms / %d Pz  (%.1f%% of max length)",
+                                pb.longest.length, pb.longest.weight,
+                                (pb.longest.length / cf.maxLen) * 100))
+                        end
+                        if pb.shortest then
+                            imgui.TextUnformatted(string.format(
+                                "  Shortest:  %d ilms / %d Pz  (%.1f%% of min length)",
+                                pb.shortest.length, pb.shortest.weight,
+                                (cf.minLen / pb.shortest.length) * 100))
+                        end
+                        if pb.heaviest then
+                            imgui.TextUnformatted(string.format(
+                                "  Heaviest:  %d ilms / %d Pz  (%.1f%% of max weight)",
+                                pb.heaviest.length, pb.heaviest.weight,
+                                (pb.heaviest.weight / wMax) * 100))
+                        end
+                        if pb.lightest then
+                            imgui.TextUnformatted(string.format(
+                                "  Lightest:  %d ilms / %d Pz  (%.1f%% of min weight)",
+                                pb.lightest.length, pb.lightest.weight,
+                                (wMin / pb.lightest.weight) * 100))
+                        end
                     else
                         imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
                         imgui.TextUnformatted("Personal Best:  None recorded yet")
@@ -2110,9 +2133,12 @@ local function render_contest_window()
                         if pb then
                             imgui.Separator()
                             imgui.PushStyleColor(ImGuiCol_Text, Colors.Success)
-                            imgui.TextUnformatted(string.format("Your Best: %d ilms / %d weight (%.1f%% of max)",
-                                pb.length, pb.weight, (pb.length / cf.maxLen) * 100))
+                            imgui.TextUnformatted("Personal Bests:")
                             imgui.PopStyleColor()
+                            if pb.longest  then imgui.TextUnformatted(string.format("  Longest:  %d ilms / %d Pz", pb.longest.length,  pb.longest.weight))  end
+                            if pb.shortest then imgui.TextUnformatted(string.format("  Shortest: %d ilms / %d Pz", pb.shortest.length, pb.shortest.weight)) end
+                            if pb.heaviest then imgui.TextUnformatted(string.format("  Heaviest: %d ilms / %d Pz", pb.heaviest.length, pb.heaviest.weight)) end
+                            if pb.lightest then imgui.TextUnformatted(string.format("  Lightest: %d ilms / %d Pz", pb.lightest.length, pb.lightest.weight)) end
                         end
                         if cf.keyItem then
                             imgui.Separator()
