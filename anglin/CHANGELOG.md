@@ -1,3 +1,6 @@
+VERSION 4.0.3
+* Added more "personal bests" to the Fishing Contest window
+
 VERSION 4.0.2
 * Changed the trigger for the initial update check if addon loads with game client (from default.txt script) so that it always shows.
 * Changelog will now show ALL changes between your previous version (starting from v4), and the version you updated to.
