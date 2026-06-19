@@ -1,3 +1,7 @@
+VERSION 4.0.4
+* Adjusted the trigger for evaluating catches for personal best fish to not require contest window to be open
+* Added a restock timer that will show next restock time, and earth time remaining until it happens
+
 VERSION 4.0.3
 * Added more "personal bests" to the Fishing Contest window
 
