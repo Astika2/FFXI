@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.3'
+addon.version   = '4.0.4'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -8,6 +8,7 @@ addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 local CURRENT_VERSION = addon.version
 
 require('common')
+local timelib = require('ffxi.time')
 local fonts    = require('fonts')
 local settings = require('settings')
 local imgui    = require('imgui')
@@ -1130,6 +1131,46 @@ local function update_player_name()
     end
 end
 
+-- Fish stock restocks at these Vana'diel hours (server-side restock ticks)
+local RESTOCK_HOURS = { 0, 4, 6, 7, 17, 18, 20 }
+
+-- Returns the next restock Vana'diel hour and the real-world seconds until it occurs.
+-- Each Vana'diel hour = 144 real seconds (a full VDay = 24 VHours = 57.6 real minutes).
+local function update_restock_cache()
+    local ok, vHour, vMin = pcall(function()
+        return timelib.get_game_hours(), timelib.get_game_minutes()
+    end)
+    if not ok or not vHour then return nil end
+
+    -- Seconds remaining in the current Vana'diel hour
+    local secsIntoHour = vMin * 2.4  -- 1 VMinute = 2.4 real seconds
+    local secsLeftInHour = 144 - secsIntoHour
+
+    -- Find the next restock hour strictly after the current one
+    local nextHour = nil
+    for _, h in ipairs(RESTOCK_HOURS) do
+        if h > vHour then
+            nextHour = h
+            break
+        end
+    end
+    -- Wrap to the first restock hour of the next Vana'diel day
+    if not nextHour then
+        nextHour = RESTOCK_HOURS[1]
+    end
+
+    -- Hours between current hour (exclusive) and next restock hour, wrapping at 24
+    local hourDiff = nextHour - vHour
+    if hourDiff <= 0 then hourDiff = hourDiff + 24 end
+    -- We already accounted for the remainder of the current hour above,
+    -- so subtract 1 full hour from the diff before converting.
+    local fullHoursBetween = hourDiff - 1
+    local secsTotal = secsLeftInHour + (fullHoursBetween * 144)
+
+    statsCache.restockHour = nextHour
+    statsCache.restockSecs = math.floor(secsTotal)
+end
+
 local function get_fishing_skill()
     local ok, result = pcall(function()
         return AshitaCore:GetMemoryManager():GetPlayer():GetCraftSkill(0):GetSkill()
@@ -1927,15 +1968,6 @@ end
 local function render_contest_window()
     if not showContest then return end
 
-    local inv = AshitaCore:GetMemoryManager():GetInventory()
-    if inv then
-        local cu = inv:GetContainerUpdateCounter()
-        if cu ~= lastContainerUpdate then
-            lastContainerUpdate = cu
-            scan_for_personal_bests()
-        end
-    end
-
     imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
     imgui.PushStyleVar(ImGuiStyleVar_FrameRounding, 4)
     imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 12, 12 })
@@ -2648,6 +2680,20 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     local reset_str = string.format('%02d:%02d:%02d', reset_h, reset_m, reset_s)
                     drawColoredText("JST Time:", jst_time_str .. '  ' .. jst_date_str, Colors.Primary)
                     drawColoredText("Day Reset:", reset_str, Colors.Warning)
+                    local nextRestockHour, restockSecs = statsCache.restockHour, statsCache.restockSecs
+                    if nextRestockHour then
+                        local r_h = math.floor(restockSecs / 3600)
+                        local r_m = math.floor((restockSecs % 3600) / 60)
+                        local r_s = restockSecs % 60
+                        local countdown_str
+                        if r_h > 0 then
+                            countdown_str = string.format('%d:%02d:%02d', r_h, r_m, r_s)
+                        else
+                            countdown_str = string.format('%02d:%02d', r_m, r_s)
+                        end
+                        local restock_str = string.format('%d:00 - %s remaining', nextRestockHour, countdown_str)
+                        drawColoredText("Next Restock:", restock_str, Colors.Accent)
+                    end
                     local skillVal = get_fishing_skill()
                     if skillVal then
                         drawColoredText("Fishing Skill:", string.format("%d", skillVal), Colors.Accent)
@@ -3261,5 +3307,26 @@ ashita.events.register('d3d_present', 'anglin_changelog_flush', function()
         end
         changelogMessages = nil
         changelogDelay    = nil
+    end
+end)
+
+-- Scans inventory for new personal-best fish independently of whether
+-- the contest window is open, so records are caught even when closed.
+ashita.events.register('d3d_present', 'anglin_pb_scan', function()
+    local inv = AshitaCore:GetMemoryManager():GetInventory()
+    if not inv then return end
+    local cu = inv:GetContainerUpdateCounter()
+    if cu ~= lastContainerUpdate then
+        lastContainerUpdate = cu
+        scan_for_personal_bests()
+    end
+end)
+
+local lastRestockUpdate = 0
+ashita.events.register('d3d_present', 'anglin_restock_update', function()
+    local now = os.clock()
+    if now - lastRestockUpdate >= 1 then
+        lastRestockUpdate = now
+        update_restock_cache()
     end
 end)
