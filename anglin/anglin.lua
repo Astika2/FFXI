@@ -1169,6 +1169,7 @@ local function update_restock_cache()
 
     statsCache.restockHour = nextHour
     statsCache.restockSecs = math.floor(secsTotal)
+    statsCache.restockCachedAt = os.time()
 end
 
 local function get_fishing_skill()
@@ -2680,8 +2681,14 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     local reset_str = string.format('%02d:%02d:%02d', reset_h, reset_m, reset_s)
                     drawColoredText("JST Time:", jst_time_str .. '  ' .. jst_date_str, Colors.Primary)
                     drawColoredText("Day Reset:", reset_str, Colors.Warning)
-                    local nextRestockHour, restockSecs = statsCache.restockHour, statsCache.restockSecs
+                    local nextRestockHour = statsCache.restockHour
+                    local restockSecs = statsCache.restockSecs
+                    if nextRestockHour and restockSecs and statsCache.restockCachedAt then
+                        local elapsed = os.time() - statsCache.restockCachedAt
+                        restockSecs = math.max(0, restockSecs - elapsed)
+                    end
                     if nextRestockHour then
+                        restockSecs = math.floor(restockSecs)
                         local r_h = math.floor(restockSecs / 3600)
                         local r_m = math.floor((restockSecs % 3600) / 60)
                         local r_s = restockSecs % 60
@@ -3324,8 +3331,8 @@ end)
 
 local lastRestockUpdate = 0
 ashita.events.register('d3d_present', 'anglin_restock_update', function()
-    local now = os.clock()
-    if now - lastRestockUpdate >= 1 then
+    local now = os.time()
+    if now - lastRestockUpdate >= 10 then
         lastRestockUpdate = now
         update_restock_cache()
     end
