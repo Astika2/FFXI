@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.4'
+addon.version   = '4.0.5'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -466,6 +466,8 @@ local fishSellPrices = {
     ["Zafmlug Bass"]=31, ["Zebra Eel"]=385,
 }
 
+FAME9_MULT = 1.025  -- ~2.5% bonus at fame 9 (confirmed on HorizonXI)
+
 local function get_sell_price(name)
     if not name then return nil end
     local p = fishSellPrices[name]
@@ -477,15 +479,18 @@ local function get_sell_price(name)
     return nil
 end
 
+-- Returns min (fame 1) and max (fame 9) gil totals for a catch
 local function calc_gil_value(catchData)
-    local total = 0
+    local minTotal = 0
+    local maxTotal = 0
     for name, count in pairs(catchData.fishCaught) do
         local price = get_sell_price(name)
         if price and price > 0 then
-            total = total + price * count
+            minTotal = minTotal + price * count
+            maxTotal = maxTotal + math.floor(price * FAME9_MULT) * count
         end
     end
-    return total
+    return minTotal, maxTotal
 end
 
 local fishingGuide = {
@@ -2435,7 +2440,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         if sp ~= nil then
                             if sp > 0 then
                                 imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
-                                imgui.TextUnformatted(string.format("Sell Price: %d gil", sp))
+                                imgui.TextUnformatted(string.format("Sell Price: %d - %d gil", sp, math.floor(sp * FAME9_MULT)))
                                 imgui.PopStyleColor()
                             else
                                 imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
@@ -2709,9 +2714,9 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     if imgui.CollapsingHeader("Fish Caught", ImGuiTreeNodeFlags_DefaultOpen) then
                         drawColoredText("Total Fish:", tostring(dailyData.totalFish), Colors.Success)
-                        local dailyGil = calc_gil_value(data.state.daily)
-                        if dailyGil > 0 then
-                            drawColoredText("Est. Gil Value:", string.format("%d gil", dailyGil), Colors.Warning)
+                        local dailyGilMin, dailyGilMax = calc_gil_value(data.state.daily)
+                        if dailyGilMin > 0 then
+                            drawColoredText("Est. Gil Value:", string.format("%d - %d gil", dailyGilMin, dailyGilMax), Colors.Warning)
                         end
                         
                         if #dailyData.fishList > 0 then
@@ -2785,9 +2790,9 @@ ashita.events.register('d3d_present', 'anglin_render', function()
 
                     if imgui.CollapsingHeader("Fish Caught", ImGuiTreeNodeFlags_DefaultOpen) then
                         drawColoredText("Total Fish:", tostring(lifetimeData.totalFish), Colors.Success)
-                        local lifetimeGil = calc_gil_value(data.state.lifetime)
-                        if lifetimeGil > 0 then
-                            drawColoredText("Est. Gil Value:", string.format("%d gil", lifetimeGil), Colors.Warning)
+                        local lifetimeGilMin, lifetimeGilMax = calc_gil_value(data.state.lifetime)
+                        if lifetimeGilMin > 0 then
+                            drawColoredText("Est. Gil Value:", string.format("%d - %d gil", lifetimeGilMin, lifetimeGilMax), Colors.Warning)
                         end
                         
                         if #lifetimeData.fishList > 0 then
