@@ -1,3 +1,6 @@
+VERSION 4.0.5
+* Added fish sale price range (prices slightly change depending on fame where you're selling) to guide and Est. Total tracker
+
 VERSION 4.0.4
 * Adjusted the trigger for evaluating catches for personal best fish to not require contest window to be open
 * Added a restock timer that will show next restock time, and earth time remaining until it happens
