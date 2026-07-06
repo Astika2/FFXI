@@ -1,3 +1,6 @@
+VERSION 4.0.6
+* Added a confirmation check when clicking reset stats for daily and lifetime
+
 VERSION 4.0.5
 * Added fish sale price range (prices slightly change depending on fame where you're selling) to guide and Est. Total tracker
 
