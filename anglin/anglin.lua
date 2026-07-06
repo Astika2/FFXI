@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.5'
+addon.version   = '4.0.6'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -2763,10 +2763,27 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     imgui.Spacing()
                     if modernButton("Reset Daily Stats", -1, 30) then
-                        data.reset_daily_stats()
-                        statsCache.dailyDirty = true
+                        imgui.OpenPopup("Reset Daily Stats?")
                     end
-                    
+
+                    if imgui.BeginPopupModal("Reset Daily Stats?", nil, ImGuiWindowFlags_AlwaysAutoResize) then
+                        imgui.TextUnformatted("Are you sure you want to reset today's stats?")
+                        imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                        imgui.TextUnformatted("This cannot be undone.")
+                        imgui.PopStyleColor()
+                        imgui.Spacing()
+                        if modernButton("Yes, Reset", 120, 30) then
+                            data.reset_daily_stats()
+                            statsCache.dailyDirty = true
+                            imgui.CloseCurrentPopup()
+                        end
+                        imgui.SameLine()
+                        if modernButton("Cancel", 120, 30) then
+                            imgui.CloseCurrentPopup()
+                        end
+                        imgui.EndPopup()
+                    end
+
                     imgui.EndTabItem()
                 end
                 
@@ -2839,10 +2856,27 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     imgui.Spacing()
                     if modernButton("Reset Lifetime Stats", -1, 30) then
-                        data.reset_lifetime_stats()
-                        statsCache.lifetimeDirty = true
+                        imgui.OpenPopup("Reset Lifetime Stats?")
                     end
-                    
+
+                    if imgui.BeginPopupModal("Reset Lifetime Stats?", nil, ImGuiWindowFlags_AlwaysAutoResize) then
+                        imgui.TextUnformatted("Are you sure you want to reset your lifetime stats?")
+                        imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                        imgui.TextUnformatted("This cannot be undone.")
+                        imgui.PopStyleColor()
+                        imgui.Spacing()
+                        if modernButton("Yes, Reset", 120, 30) then
+                            data.reset_lifetime_stats()
+                            statsCache.lifetimeDirty = true
+                            imgui.CloseCurrentPopup()
+                        end
+                        imgui.SameLine()
+                        if modernButton("Cancel", 120, 30) then
+                            imgui.CloseCurrentPopup()
+                        end
+                        imgui.EndPopup()
+                    end
+
                     imgui.EndTabItem()
                 end
 
