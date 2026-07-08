@@ -1,3 +1,6 @@
+VERSION 4.0.7
+* Corrected how catch detection works for NM mobs - this should work now.
+
 VERSION 4.0.6
 * Added a confirmation check when clicking reset stats for daily and lifetime
 
