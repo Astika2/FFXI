@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.6'
+addon.version   = '4.0.7'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1017,6 +1017,7 @@ local function normalize_catch_name(name)
     n = n:gsub("^set of%s+", "")
     n = n:gsub("^bunch of%s+", "")
     n = n:gsub("^piece of%s+", "")
+    n = n:gsub("%s*%[.-%]%s*$", "") -- strip trailing tags like " [NM]" (guide names include these, actual catch names never do)
     return n
 end
 
