@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.7'
+addon.version   = '4.0.8'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -176,6 +176,7 @@ local defaults = T{
     CaughtColor = "FFFFFFFF",   -- RRGGBBAA hex for guide "Caught" label (white)
     UncaughtColor = "808080FF", -- RRGGBBAA hex for guide "Uncaught" label (gray)
     SilentToggle = false,       -- suppress "X window toggled." chat messages
+    SkillUpSoundEnabled = true, -- play a sound when fishing skill levels up
 }
 
 local state = {
@@ -196,6 +197,8 @@ local state = {
     LastFishingStatus = nil,
     FishingEndTime = nil,
     AwaitingMonsterName = false,
+    SkillUpSoundEnabled = true,
+    PlaySkillUpSound = nil, -- assigned once play_skillup_sound is defined
 }
 -- Plain locals for settings that T{} metatable may silently swallow on write.
 -- These are the source of truth; state.Settings is only used for Font/legacy.
@@ -1323,6 +1326,37 @@ local function echo(msg)
     AshitaCore:GetChatManager():QueueCommand(1, '/echo [Anglin] ' .. msg)
 end
 
+-- ============================================================
+-- Fishing Skill-Up Sound Alert
+-- ============================================================
+-- Uses a custom sounds\skillup.wav next to the addon if the user drops one
+-- in, otherwise falls back to a stock Windows chime (no bundled file needed).
+local function resolve_skillup_sound()
+    local custom = string.format('%s\\addons\\anglin\\sounds\\skillup.wav', AshitaCore:GetInstallPath())
+    local f = io.open(custom, 'rb')
+    if f then
+        f:close()
+        return custom
+    end
+    local winDir = os.getenv('SystemRoot') or os.getenv('WINDIR') or 'C:\\Windows'
+    return winDir .. '\\Media\\tada.wav'
+end
+local SKILLUP_SOUND_FILE = resolve_skillup_sound()
+local skillUpLastAlertTime = 0
+
+-- Plays the skill-up chime, respecting the user's preference and a short
+-- debounce so a single chat line can't trigger it more than once.
+local function play_skillup_sound(force)
+    if not force and not state.SkillUpSoundEnabled then return end
+    local now = os.clock()
+    if not force and (now - skillUpLastAlertTime) < 2.0 then return end
+    skillUpLastAlertTime = now
+    pcall(ashita.misc.play_sound, SKILLUP_SOUND_FILE)
+end
+-- Exposed on `state` (already an upvalue everywhere it's needed, including the
+-- large render function) so callers don't need play_skillup_sound as a fresh upvalue.
+state.PlaySkillUpSound = play_skillup_sound
+
 local updateMessageDelay  = nil
 local changelogMessages   = nil
 local changelogDelay      = nil
@@ -1528,6 +1562,7 @@ local function save_prefs()
     f:write(string.format('  CaughtColor        = %q,\n',   pref_CaughtColor))
     f:write(string.format('  UncaughtColor      = %q,\n',   pref_UncaughtColor))
     f:write(string.format('  SilentToggle       = %s,\n',   tostring(pref_SilentToggle == true)))
+    f:write(string.format('  SkillUpSoundEnabled = %s,\n',  tostring(state.SkillUpSoundEnabled == true)))
     f:write(string.format('  activeStatsTab     = %q,\n',   activeStatsTab))
     f:write('  CustomColors = {\n')
     f:write(string.format('    Primary      = %q,\n', cc.Primary      or 'FFB974FF'))
@@ -1573,6 +1608,9 @@ local function load_prefs()
     -- boolean: the file writes "true"/"false" as Lua literals, dofile returns them as booleans
     if result.SilentToggle ~= nil then
         pref_SilentToggle = (result.SilentToggle == true)
+    end
+    if result.SkillUpSoundEnabled ~= nil then
+        state.SkillUpSoundEnabled = (result.SkillUpSoundEnabled == true)
     end
     if result.activeStatsTab ~= nil then
         activeStatsTab = result.activeStatsTab
@@ -1676,6 +1714,11 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
     -- Trigger update check when the server welcome message appears
     if cleanMsg:find('Welcome to HorizonXI', 1, true) then
         check_for_update()
+    end
+
+    -- Fishing skill level-up notification, e.g. "Character's fishing skill reaches level 42."
+    if cleanMsg:match('[Ff]ishing skill reaches level %d+') then
+        play_skillup_sound()
     end
 
     for _, entry in ipairs(hookMessages) do
@@ -3162,7 +3205,28 @@ ashita.events.register('d3d_present', 'anglin_render', function()
 
             imgui.Spacing()
             imgui.Spacing()
-            
+
+            -- Skill-up sound alert option
+            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+            imgui.TextUnformatted("Fishing Skill-Up Alert:")
+            imgui.PopStyleColor()
+            imgui.Spacing()
+            local skillUpSound = { state.SkillUpSoundEnabled }
+            if imgui.Checkbox("Play a sound when fishing skill levels up", skillUpSound) then
+                state.SkillUpSoundEnabled = skillUpSound[1]
+                save_prefs()
+            end
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip("Plays a short chime when the chatlog shows your fishing skill reaching a new level.")
+            end
+            imgui.SameLine()
+            if modernButton("Test Sound", 100, 22) then
+                state.PlaySkillUpSound(true)
+            end
+
+            imgui.Spacing()
+            imgui.Spacing()
+
             if modernButton("Close Settings", 150, 30) then
                 showSettings = false
             end
