@@ -1357,6 +1357,32 @@ end
 -- large render function) so callers don't need play_skillup_sound as a fresh upvalue.
 state.PlaySkillUpSound = play_skillup_sound
 
+-- Detects fishing skill-ups by polling the character's own craft-skill memory
+-- value directly, rather than matching chat text. This is what actually makes
+-- it reliable: chat text (e.g. "X's fishing skill reaches level 42.") can be
+-- typed by any player in a visible channel, but this value can only change
+-- when *your own* skill genuinely goes up.
+local lastKnownFishingSkill = nil
+local lastSkillCheckTime = 0
+local function check_fishing_skillup()
+    local now = os.time()
+    if now - lastSkillCheckTime < 1 then return end
+    lastSkillCheckTime = now
+
+    local currentSkill = get_fishing_skill()
+    if not currentSkill or currentSkill <= 0 then return end
+
+    if lastKnownFishingSkill then
+        local delta = currentSkill - lastKnownFishingSkill
+        -- Only treat small positive jumps as a real skill-up; large jumps are
+        -- more likely a data resync (e.g. zoning) than an actual level gain.
+        if delta > 0 and delta <= 10 then
+            play_skillup_sound()
+        end
+    end
+    lastKnownFishingSkill = currentSkill
+end
+
 local updateMessageDelay  = nil
 local changelogMessages   = nil
 local changelogDelay      = nil
@@ -1714,11 +1740,6 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
     -- Trigger update check when the server welcome message appears
     if cleanMsg:find('Welcome to HorizonXI', 1, true) then
         check_for_update()
-    end
-
-    -- Fishing skill level-up notification, e.g. "Character's fishing skill reaches level 42."
-    if cleanMsg:match('[Ff]ishing skill reaches level %d+') then
-        play_skillup_sound()
     end
 
     for _, entry in ipairs(hookMessages) do
@@ -3419,6 +3440,10 @@ ashita.events.register('d3d_present', 'anglin_changelog_flush', function()
         changelogMessages = nil
         changelogDelay    = nil
     end
+end)
+
+ashita.events.register('d3d_present', 'anglin_skillup_check', function()
+    check_fishing_skillup()
 end)
 
 -- Scans inventory for new personal-best fish independently of whether
