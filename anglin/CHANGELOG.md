@@ -1,3 +1,6 @@
+VERSION 4.0.8
+* Added a sound notification for fishing skill increase
+  
 VERSION 4.0.7
 * Corrected how catch detection works for NM mobs - this should work now.
 
