@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.8'
+addon.version   = '4.0.9'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1187,6 +1187,96 @@ local function get_fishing_skill()
     end)
     if ok and result then return result end
     return nil
+end
+
+-- Ashita's Player interface has no memory value for gear-derived skill bonuses
+-- (GetCraftSkill only exposes the raw/base skill), so the only way to detect a
+-- Fishing Skill bonus is to scan equipped gear against a list of known items.
+-- This list is the complete set of FISH (mod 127) items pulled directly from the
+-- server's item_mods.sql dump, so it should be exhaustive for this server.
+local FISHING_SKILL_GEAR = {
+    ["Fisherman's Tunica"] = 1,
+    ["Angler's Tunica"]    = 1,
+    ["Fisherman's Gloves"] = 1,
+    ["Angler's Gloves"]    = 1,
+    ["Fisherman's Hose"]   = 1,
+    ["Angler's Hose"]      = 1,
+    ["Fisherman's Boots"]  = 1,
+    ["Angler's Boots"]     = 1,
+    ["Waders"]             = 2,
+    ["Fisherman's Smock"]  = 1,
+    ["Fisher's Torque"]    = 2,
+}
+
+-- Items whose bonus only applies conditionally (per item_latents.sql). Trainee's
+-- Spectacles grants Fishing +1, but only while base Fishing skill is under 40.
+local FISHING_SKILL_GEAR_CONDITIONAL = {
+    ["Trainee's Spectacles"] = { bonus = 1, maxSkill = 40 },
+}
+
+-- Key item ID 523 = MOGHANCEMENT_FISHING (Mog Garden active effect), confirmed
+-- straight from the server source (src/map/items/item_furnishing.h):
+--   MOGHANCEMENT_FISHING      = 523, // Increases your fishing skill by 1
+--   MOGHANCEMENT_FISHING_ITEM = 534, // Increases the chances of finding items when fishing
+-- CCharEntity::UpdateMoghancement() (charentity.cpp) casts these values straight to
+-- KeyItem and adds them via charutils::addKeyItem, so HasKeyItem(523) is correct here.
+-- (534 is the item-find variant and does not affect skill -- not used.)
+local MOGHANCEMENT_FISHING_KEY_ITEM_ID = 523
+local MOGHANCEMENT_FISHING_BONUS = 1
+
+-- NOTE: intentionally global (not local) -- the main render function already sits at
+-- LuaJIT's 60-upvalue-per-function ceiling, and adding another local here would push
+-- it over that limit and fail to load. Globals don't consume upvalue slots.
+function anglin_get_fishing_skill_bonus()
+    local ok, result = pcall(function()
+        local inv = AshitaCore:GetMemoryManager():GetInventory()
+        if not inv then return 0 end
+
+        local baseSkill = get_fishing_skill() or 0
+        local total = 0
+        for slot = 0, 15 do
+            local eitem = inv:GetEquippedItem(slot)
+            if eitem and eitem.Index ~= 0 then
+                local container = bit.rshift(eitem.Index, 8)
+                local index = bit.band(eitem.Index, 0xFF)
+                local item = inv:GetContainerItem(container, index)
+                if item and item.Id ~= 0 then
+                    local resItem = AshitaCore:GetResourceManager():GetItemById(item.Id)
+                    if resItem and resItem.Name and resItem.Name[1] then
+                        local name = resItem.Name[1]
+                        local itemBonus = FISHING_SKILL_GEAR[name]
+                        if itemBonus then
+                            total = total + itemBonus
+                        end
+                        local conditional = FISHING_SKILL_GEAR_CONDITIONAL[name]
+                        if conditional and baseSkill < conditional.maxSkill then
+                            total = total + conditional.bonus
+                        end
+                    end
+                end
+            end
+        end
+
+        if MOGHANCEMENT_FISHING_KEY_ITEM_ID then
+            local player = AshitaCore:GetMemoryManager():GetPlayer()
+            if player and player:HasKeyItem(MOGHANCEMENT_FISHING_KEY_ITEM_ID) then
+                total = total + MOGHANCEMENT_FISHING_BONUS
+            end
+        end
+
+        return total
+    end)
+    if ok and result then return result end
+    return 0
+end
+
+-- Formats a skill value with its gear bonus, e.g. "100 + 4" (or just "100" with no bonus)
+function anglin_format_skill_with_bonus(skillVal)
+    local bonus = anglin_get_fishing_skill_bonus()
+    if bonus and bonus ~= 0 then
+        return string.format("%d + %d", skillVal, bonus)
+    end
+    return string.format("%d", skillVal)
 end
 
 local function detect_bait()
@@ -2597,7 +2687,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         imgui.TextColored({1,0.4,0.4,1}, "Skill data unavailable.")
                     else
                         imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
-                        imgui.TextUnformatted(string.format("Your Fishing Skill: %d", playerSkill))
+                        imgui.TextUnformatted(string.format("Your Fishing Skill: %s", anglin_format_skill_with_bonus(playerSkill)))
                         imgui.PopStyleColor()
                         imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
                         imgui.TextWrapped("Best targets are fish with skill requirements 5-11 above yours.")
@@ -2773,7 +2863,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     end
                     local skillVal = get_fishing_skill()
                     if skillVal then
-                        drawColoredText("Fishing Skill:", string.format("%d", skillVal), Colors.Accent)
+                        drawColoredText("Fishing Skill:", anglin_format_skill_with_bonus(skillVal), Colors.Accent)
                     end
                     drawSection()
                     
@@ -2866,7 +2956,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
 
                     local skillVal = get_fishing_skill()
                     if skillVal then
-                        drawColoredText("Fishing Skill:", string.format("%d", skillVal), Colors.Accent)
+                        drawColoredText("Fishing Skill:", anglin_format_skill_with_bonus(skillVal), Colors.Accent)
                         drawSection()
                     end
 
@@ -3238,7 +3328,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 save_prefs()
             end
             if imgui.IsItemHovered() then
-                imgui.SetTooltip("Plays a short chime when the chatlog shows your fishing skill reaching a new level.")
+                imgui.SetTooltip("Plays a sound file when your fishing skill reaches a new level. Customize this by adding your own skillup.wav sound to the Sounds folder.")
             end
             imgui.SameLine()
             if modernButton("Test Sound", 100, 22) then
