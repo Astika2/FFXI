@@ -1,3 +1,6 @@
+VERSION 4.0.9
+* Added display of bonus fishing skill from gear/moghancement
+
 VERSION 4.0.8
 * Added a sound notification for fishing skill increase
   
