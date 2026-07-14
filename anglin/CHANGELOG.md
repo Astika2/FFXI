@@ -1,3 +1,6 @@
+VERSION 4.0.9.1
+* Added display of bonus fishing skill from guild support/advanced support
+
 VERSION 4.0.9
 * Added display of bonus fishing skill from gear/moghancement
 
