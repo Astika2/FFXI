@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.9.1'
+addon.version   = '4.0.10'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -9,7 +9,8 @@ local CURRENT_VERSION = addon.version
 
 require('common')
 local timelib = require('ffxi.time')
-local fonts    = require('fonts')
+local fonts      = require('fonts')
+local primitives = require('primitives')
 local settings = require('settings')
 local imgui    = require('imgui')
 local data     = require('data_manager')
@@ -124,6 +125,18 @@ local ColorThemes = {
         Warning = 0xFF96E5FA,
         Error = 0xFFA29AFF,
     },
+    ["Crash's Hotdog Stand"] = {
+        -- Primary drives most of the UI chrome (title bars, buttons, sliders, borders,
+        -- tabs), so it needs to be the red for this to actually read as "hot dog stand"
+        -- instead of just orange. Accent (mustard) pops against it on highlighted text.
+        Primary = 0xFF2A34E0,      -- Ketchup red
+        PrimaryDark = 0xFF1922A8,  -- Deep red (pressed/active state)
+        PrimaryLight = 0xFFC3E6F5, -- Cream (hover highlight)
+        Accent = 0xFF29B4F0,       -- Mustard yellow
+        Success = 0xFF42B37C,      -- Relish green
+        Warning = 0xFF23A1F4,      -- Golden orange
+        Error = 0xFF1F1F7A,        -- Deep maroon
+    },
     ["Custom"] = {
         Primary = 0xFFFFB974,
         PrimaryDark = 0xFFD69954,
@@ -209,6 +222,16 @@ local pref_SilentToggle  = false
 local pref_Transparency  = 0.92
 local pref_FontScale     = 1.15
 local pref_CustomColors  = { Primary = "FFB974FF", PrimaryDark = "D69954FF", PrimaryLight = "FFD49FFF" }
+
+-- Background image (behind each Anglin window, via the primitives library since
+-- ImGui itself has no notion of a window "backdrop" image).
+local pref_BackgroundImageEnabled = true
+local pref_CustomBackgroundImage = "" -- filename only, resolved inside resources/; blank = use the default checker
+local BACKGROUND_RESOURCES_DIR = string.format('%saddons/anglin/resources/', AshitaCore:GetInstallPath())
+local DEFAULT_BACKGROUND_IMAGE_PATH = BACKGROUND_RESOURCES_DIR .. 'checker_bg.png'
+local BACKGROUND_PRIM_KEYS = { 'contest', 'guide', 'stats', 'settings', 'hud' }
+local backgroundPrims = {}
+
 local windowPosX = 100
 local function push_font()
     imgui.SetWindowFontScale(pref_FontScale)
@@ -1339,6 +1362,65 @@ function anglin_format_skill_with_bonus(skillVal)
     return string.format("%d", skillVal)
 end
 
+-- Background image helpers -- all global (not local) for the same reason as the
+-- fishing skill helpers above: the main render function sits at LuaJIT's 60-upvalue
+-- ceiling, and any new *local* referenced from inside it (pref_BackgroundImageEnabled,
+-- backgroundPrims, etc.) would push it over. Routing everything through globals means
+-- the render function only ever holds a reference to the global function itself, which
+-- costs it nothing.
+function anglin_get_background_image_enabled()
+    return pref_BackgroundImageEnabled
+end
+
+-- Returns the full path to whichever background image should currently be used:
+-- the user's custom file (resources/<filename>) if one is set, otherwise the
+-- built-in checkered default.
+function anglin_get_background_image_path()
+    if pref_CustomBackgroundImage and pref_CustomBackgroundImage ~= "" then
+        return BACKGROUND_RESOURCES_DIR .. pref_CustomBackgroundImage
+    end
+    return DEFAULT_BACKGROUND_IMAGE_PATH
+end
+
+function anglin_get_custom_background_image()
+    return pref_CustomBackgroundImage
+end
+
+-- anglin_set_background_image_enabled and anglin_set_custom_background_image are
+-- defined further down (right after save_prefs), since save_prefs is a local
+-- declared later in the file and Lua resolves locals lexically -- referencing it
+-- from here would silently resolve to a nil global instead of the real function.
+
+-- Syncs one background primitive to the currently-drawing ImGui window's position and
+-- size (when visible=true), or hides it (when visible=false / the feature is off).
+-- Must be called with visible=true from inside an active ImGui window context, i.e.
+-- right after a successful imgui.Begin(), so GetWindowPos/GetWindowSize are valid.
+function anglin_sync_background_prim(key, visible)
+    local prim = backgroundPrims[key]
+    if not prim then return end
+    if not pref_BackgroundImageEnabled or not visible then
+        prim.visible = false
+        return
+    end
+    local wx, wy = imgui.GetWindowPos()
+    local ww, wh = imgui.GetWindowSize()
+    prim.position_x = wx
+    prim.position_y = wy
+    prim.width = ww
+    prim.height = wh
+    prim.visible = true
+end
+
+-- Hides every background primitive. Called once at the top of each render pass so
+-- any window that doesn't end up drawing this frame (closed, collapsed, etc.) simply
+-- stays hidden by default instead of needing an explicit hide call at every possible
+-- early-exit path.
+function anglin_reset_background_prims_visibility()
+    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
+        anglin_sync_background_prim(key, false)
+    end
+end
+
 local function detect_bait()
     local inv = AshitaCore:GetMemoryManager():GetInventory()
     if not inv then
@@ -1739,6 +1821,8 @@ local function save_prefs()
     f:write(string.format('  UncaughtColor      = %q,\n',   pref_UncaughtColor))
     f:write(string.format('  SilentToggle       = %s,\n',   tostring(pref_SilentToggle == true)))
     f:write(string.format('  SkillUpSoundEnabled = %s,\n',  tostring(state.SkillUpSoundEnabled == true)))
+    f:write(string.format('  BackgroundImageEnabled = %s,\n', tostring(pref_BackgroundImageEnabled == true)))
+    f:write(string.format('  CustomBackgroundImage = %q,\n', pref_CustomBackgroundImage or ""))
     f:write(string.format('  activeStatsTab     = %q,\n',   activeStatsTab))
     f:write('  CustomColors = {\n')
     f:write(string.format('    Primary      = %q,\n', cc.Primary      or 'FFB974FF'))
@@ -1747,6 +1831,27 @@ local function save_prefs()
     f:write('  },\n')
     f:write('}\n')
     f:close()
+end
+
+function anglin_set_background_image_enabled(value)
+    pref_BackgroundImageEnabled = value
+    save_prefs()
+end
+
+-- Sets the custom background image filename (expected to live in
+-- addons/anglin/resources/), or clears it back to the default checker when
+-- passed an empty string. Retextures any already-created primitives live so
+-- the change is visible without a reload.
+function anglin_set_custom_background_image(filename)
+    pref_CustomBackgroundImage = filename or ""
+    local path = anglin_get_background_image_path()
+    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
+        local prim = backgroundPrims[key]
+        if prim then
+            pcall(function() prim.texture = path end)
+        end
+    end
+    save_prefs()
 end
 
 -- save_window_pos is kept as an alias so the existing call-sites still work.
@@ -1787,6 +1892,12 @@ local function load_prefs()
     end
     if result.SkillUpSoundEnabled ~= nil then
         state.SkillUpSoundEnabled = (result.SkillUpSoundEnabled == true)
+    end
+    if result.BackgroundImageEnabled ~= nil then
+        pref_BackgroundImageEnabled = (result.BackgroundImageEnabled == true)
+    end
+    if result.CustomBackgroundImage ~= nil then
+        pref_CustomBackgroundImage = result.CustomBackgroundImage
     end
     if result.activeStatsTab ~= nil then
         activeStatsTab = result.activeStatsTab
@@ -1829,12 +1940,56 @@ local function apply_prefs()
     end
 end
 
+-- Creates one hidden primitive per Anglin window, ready to be positioned and
+-- shown behind whichever windows are actually open each frame.
+local function init_background_prims()
+    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
+        local ok, prim = pcall(function()
+            local p = primitives.new({
+                texture_offset_x = 0.0,
+                texture_offset_y = 0.0,
+                border_visible   = false,
+                border_color     = 0x00000000,
+                border_flags     = 0,
+                border_sizes     = '0,0,0,0',
+                visible          = false,
+                position_x       = 0,
+                position_y       = 0,
+                can_focus        = false,
+                locked           = true,
+                lockedz          = true,
+                scale_x          = 1.0,
+                scale_y          = 1.0,
+                width            = 0.0,
+                height           = 0.0,
+                color            = 0xFFFFFFFF,
+            })
+            p.texture = anglin_get_background_image_path()
+            return p
+        end)
+        if ok then
+            backgroundPrims[key] = prim
+        end
+    end
+end
+
+local function destroy_background_prims()
+    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
+        local prim = backgroundPrims[key]
+        if prim then
+            pcall(function() prim:destroy() end)
+        end
+    end
+    backgroundPrims = {}
+end
+
 ashita.events.register('load', 'load_cb', function()
     update_player_name()
     state.Settings = settings.load(defaults)
     state.Font = fonts.new(state.Settings.Font)
     windowPosX = 100
     windowPosY = 100
+    init_background_prims()
     -- Register a callback so load_prefs runs again once the character is known
     -- and settings_path() returns the character-specific folder.
     settings.register('settings', 'anglin_prefs_cb', function()
@@ -1875,6 +2030,7 @@ ashita.events.register('unload', 'unload_cb', function()
     end
     save_prefs()
     data.save_state()
+    destroy_background_prims()
 end)
 
 ashita.events.register('text_in', 'anglin_HandleText', function(e)
@@ -2201,6 +2357,7 @@ local function render_contest_window()
     local contestOpen = { showContest }
     if imgui.Begin("Fishing Contest##anglin_contest", contestOpen) then
         showContest = contestOpen[1]
+        anglin_sync_background_prim('contest', true)
         push_font()
 
         -- --------------------------------------------------------
@@ -2490,6 +2647,10 @@ ashita.events.register('command', 'anglin_command', function(e)
 end)
 
 ashita.events.register('d3d_present', 'anglin_render', function()
+    -- Default every background primitive to hidden; whichever windows actually draw
+    -- this frame will flip their own back on further down.
+    anglin_reset_background_prims_visibility()
+
     -- Load contest cache and run update check as soon as playerName becomes available
     if not contestCacheLoadAttempted and playerName and playerName ~= '' then
         contestCacheLoadAttempted = true
@@ -2529,6 +2690,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         local guideOpen = { showGuide }
         if imgui.Begin("Fishing Guide", guideOpen, ImGuiWindowFlags_NoCollapse) then
             showGuide = guideOpen[1]
+            anglin_sync_background_prim('guide', true)
             push_font()
 
             if imgui.BeginTabBar("GuideTabBar" .. guideTabBarId) then
@@ -2875,6 +3037,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         local statsOpen = { showStats }
         if imgui.Begin("Fishing Statistics", statsOpen, ImGuiWindowFlags_NoCollapse) then
             showStats = statsOpen[1]
+            anglin_sync_background_prim('stats', true)
             push_font()
             if imgui.BeginTabBar("StatsTabBar") then
                 local dailyTabFlags = (statsTabNeedsRestore and activeStatsTab == "Daily") and ImGuiTabItemFlags_SetSelected or 0
@@ -3125,6 +3288,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         local settingsOpen = { showSettings }
         if imgui.Begin("Anglin Settings", settingsOpen, ImGuiWindowFlags_NoCollapse) then
             showSettings = settingsOpen[1]
+            anglin_sync_background_prim('settings', true)
             push_font()
             
             drawSection("Appearance")
@@ -3175,7 +3339,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             imgui.TextUnformatted("Select Theme:")
             imgui.PopStyleColor()
             
-            local themeNames = {"Soft Blue", "Ocean Teal", "Purple Dream", "Forest Green", "Sunset Orange", "Cool Gray", "Custom"}
+            local themeNames = {"Soft Blue", "Ocean Teal", "Purple Dream", "Forest Green", "Sunset Orange", "Cool Gray", "Crash's Hotdog Stand", "Custom"}
             local currentTheme = pref_ColorTheme
             
             imgui.PushItemWidth(200)
@@ -3186,6 +3350,10 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         pref_ColorTheme = themeName
                         if themeName ~= "Custom" then
                             applyColorTheme(themeName)
+                            -- Crash's Hotdog Stand ships with its background image on by
+                            -- default; every other built-in theme resets it off so picking
+                            -- a theme doesn't leave a mismatched backdrop behind.
+                            anglin_set_background_image_enabled(themeName == "Crash's Hotdog Stand")
                         end
                         save_prefs()
                     end
@@ -3263,7 +3431,43 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                 imgui.TextWrapped("Tip: Changes apply instantly as you type valid color codes.")
                 imgui.PopStyleColor()
             end
-            
+
+            imgui.Spacing()
+            imgui.Spacing()
+            drawSection("Background Image")
+            local bgImageEnabled = { anglin_get_background_image_enabled() }
+            if imgui.Checkbox("Show a background image behind Anglin windows", bgImageEnabled) then
+                anglin_set_background_image_enabled(bgImageEnabled[1])
+            end
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip("Displays a checkered backdrop image behind Anglin's windows. Blends with the Window Transparency setting above.")
+            end
+
+            imgui.Spacing()
+            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+            imgui.TextUnformatted("Custom Image File:")
+            imgui.PopStyleColor()
+            imgui.SameLine()
+
+            local customBgImageBuf = { anglin_get_custom_background_image() }
+            imgui.PushItemWidth(160)
+            if imgui.InputText("##CustomBgImage", customBgImageBuf, 128, ImGuiInputTextFlags_EnterReturnsTrue) then
+                anglin_set_custom_background_image(customBgImageBuf[1])
+            end
+            imgui.PopItemWidth()
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip("Press Enter to apply. Leave blank to use the default checkered image.")
+            end
+            imgui.SameLine()
+            if imgui.Button("Clear##ClearBgImage") then
+                anglin_set_custom_background_image("")
+            end
+
+            imgui.Spacing()
+            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+            imgui.TextWrapped("To use your own background image: drop an image file (PNG works best) into your Ashita install's addons/anglin/resources/ folder, then type just the filename above (e.g. myimage.png) and press Enter.")
+            imgui.PopStyleColor()
+
             imgui.Spacing()
             imgui.Spacing()
             drawSection("Guide Colors")
@@ -3466,6 +3670,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     imgui.SetNextWindowSize({ 340, 0 }, ImGuiCond_Always)
     local anglinOpen = { true }
     imgui.Begin("Anglin", anglinOpen, bit.bor(ImGuiWindowFlags_NoCollapse, ImGuiWindowFlags_AlwaysAutoResize))
+    anglin_sync_background_prim('hud', true)
     if not anglinOpen[1] then
         reset_fishing_session()
     end
