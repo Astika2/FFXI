@@ -1,6 +1,6 @@
 VERSION 4.9.11
 * Suggested fish will now consider your EFFECTIVE skill (with gear and bonuses)
-* VERSION 4.9.10
+VERSION 4.9.10
 * Can now use a background image with your themes
 VERSION 4.0.9.1
 * Added display of bonus fishing skill from guild support/advanced support
