@@ -2908,18 +2908,24 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     if not playerSkill then
                         imgui.TextColored({1,0.4,0.4,1}, "Skill data unavailable.")
                     else
+                        local skillBonus = anglin_get_fishing_skill_bonus() or 0
+                        local effectiveSkill = playerSkill + skillBonus
+
                         imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
                         imgui.TextUnformatted(string.format("Your Fishing Skill: %s", anglin_format_skill_with_bonus(playerSkill)))
                         imgui.PopStyleColor()
                         imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
                         imgui.TextWrapped("Best targets are fish with skill requirements 5-11 above yours.")
+                        if skillBonus ~= 0 then
+                            imgui.TextWrapped(string.format("Suggestions use your effective skill (%d) including gear/buff bonuses.", effectiveSkill))
+                        end
                         imgui.PopStyleColor()
                         imgui.Spacing()
                         imgui.Separator()
                         imgui.Spacing()
 
-                        local skillMin = playerSkill + 5
-                        local skillMax = playerSkill + 11
+                        local skillMin = effectiveSkill + 5
+                        local skillMax = effectiveSkill + 11
                         local suggestions = {}
                         for _, fish in ipairs(fishingGuide) do
                             if fish.skill > 0 and fish.type == "Fish" and
@@ -2935,10 +2941,53 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                                 table.insert(suggestions, {
                                     fish = fish,
                                     caught = caught,
-                                    gap = fish.skill - playerSkill,
+                                    gap = fish.skill - effectiveSkill,
                                 })
                             end
                         end
+
+                        local usedFallbackSuggestions = false
+                        if #suggestions == 0 then
+                            -- Nothing landed in the ideal +5/+11 window -- fall back to the
+                            -- 2 closest fish just below it and the 2 closest just above, so
+                            -- the tab still shows something actionable instead of going empty.
+                            local below, above = {}, {}
+                            for _, fish in ipairs(fishingGuide) do
+                                if fish.skill > 0 and fish.type == "Fish" then
+                                    if fish.skill < skillMin then
+                                        table.insert(below, fish)
+                                    elseif fish.skill > skillMax then
+                                        table.insert(above, fish)
+                                    end
+                                end
+                            end
+                            table.sort(below, function(a, b) return a.skill > b.skill end) -- nearest-below first
+                            table.sort(above, function(a, b) return a.skill < b.skill end) -- nearest-above first
+
+                            local fallbackFish = {}
+                            for i = 1, math.min(2, #below) do table.insert(fallbackFish, below[i]) end
+                            for i = 1, math.min(2, #above) do table.insert(fallbackFish, above[i]) end
+
+                            if #fallbackFish > 0 then
+                                usedFallbackSuggestions = true
+                                for _, fish in ipairs(fallbackFish) do
+                                    local normName = normalize_catch_name(fish.name)
+                                    local caught = false
+                                    for caughtFish, _ in pairs(data.state.lifetime.fishCaught) do
+                                        if normalize_catch_name(caughtFish) == normName then
+                                            caught = true
+                                            break
+                                        end
+                                    end
+                                    table.insert(suggestions, {
+                                        fish = fish,
+                                        caught = caught,
+                                        gap = fish.skill - effectiveSkill,
+                                    })
+                                end
+                            end
+                        end
+
                         table.sort(suggestions, function(a, b)
                             return a.fish.skill < b.fish.skill
                         end)
@@ -2951,9 +3000,15 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                             imgui.PopStyleColor()
                         else
                             imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
-                            imgui.TextUnformatted(string.format(
-                                "Ideal range: Skill %d-%d  (%d targets)",
-                                skillMin, skillMax, #suggestions))
+                            if usedFallbackSuggestions then
+                                imgui.TextWrapped(string.format(
+                                    "No fish in the ideal range (Skill %d-%d) -- showing the closest matches instead (%d)",
+                                    skillMin, skillMax, #suggestions))
+                            else
+                                imgui.TextUnformatted(string.format(
+                                    "Ideal range: Skill %d-%d  (%d targets)",
+                                    skillMin, skillMax, #suggestions))
+                            end
                             imgui.PopStyleColor()
                             imgui.Spacing()
 
