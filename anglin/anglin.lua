@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.9'
+addon.version   = '4.0.9.1'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1224,6 +1224,26 @@ local FISHING_SKILL_GEAR_CONDITIONAL = {
 local MOGHANCEMENT_FISHING_KEY_ITEM_ID = 523
 local MOGHANCEMENT_FISHING_BONUS = 1
 
+-- Fishing Support / Advanced Fishing Support (Fisherman's Guild NPCs) both apply the
+-- same status effect -- FISHING_IMAGERY, id 235 -- just with different power/duration
+-- (scripts/globals/hobbies/crafting/image_support.lua):
+--   Support (free):    power = 1, duration = 3600  (1hr)
+--   Advanced Support:  power = 2, duration = 7200  (2hr)
+-- scripts/effects/fishing_imagery.lua applies that power straight to the FISH mod.
+-- Ashita's client only exposes the buff ID + remaining duration, not its power, so we
+-- can't read +1 vs +2 directly. We infer it from remaining duration instead: Advanced
+-- is the only one that can ever show more than 3600s left, so >3600s remaining means
+-- Advanced for certain. Support and Advanced Support can't be active at the same time
+-- (applying either clears the other via delStatusEffectsByFlag), so once we've caught
+-- a >3600s reading we latch "advanced" and keep the +2 for the rest of the buff's
+-- life, even after its timer decays under 3600s. The latch clears once the buff
+-- disappears entirely (expired or replaced).
+local FISHING_IMAGERY_EFFECT_ID = 235
+local FISHING_SUPPORT_BONUS = 1
+local ADVANCED_FISHING_SUPPORT_BONUS = 2
+local ADVANCED_FISHING_SUPPORT_DURATION_THRESHOLD = 3600
+local fishingSupportState = { active = false, advanced = false }
+
 -- NOTE: intentionally global (not local) -- the main render function already sits at
 -- LuaJIT's 60-upvalue-per-function ceiling, and adding another local here would push
 -- it over that limit and fail to load. Globals don't consume upvalue slots.
@@ -1257,10 +1277,50 @@ function anglin_get_fishing_skill_bonus()
             end
         end
 
-        if MOGHANCEMENT_FISHING_KEY_ITEM_ID then
-            local player = AshitaCore:GetMemoryManager():GetPlayer()
-            if player and player:HasKeyItem(MOGHANCEMENT_FISHING_KEY_ITEM_ID) then
+        local player = AshitaCore:GetMemoryManager():GetPlayer()
+        if player then
+            if MOGHANCEMENT_FISHING_KEY_ITEM_ID and player:HasKeyItem(MOGHANCEMENT_FISHING_KEY_ITEM_ID) then
                 total = total + MOGHANCEMENT_FISHING_BONUS
+            end
+
+            local buffs = player:GetBuffs()
+            local sawFishingImagery = false
+            if buffs then
+                for i = 1, #buffs do
+                    if buffs[i] == FISHING_IMAGERY_EFFECT_ID then
+                        sawFishingImagery = true
+
+                        local remaining = 0
+                        local timers = player:GetStatusTimers()
+                        if timers and timers[i] then
+                            remaining = timers[i]
+                        end
+
+                        if not fishingSupportState.active then
+                            -- First time we've seen this buff since it was last gone --
+                            -- lock in whether it's Advanced based on this reading.
+                            fishingSupportState.active   = true
+                            fishingSupportState.advanced = remaining > ADVANCED_FISHING_SUPPORT_DURATION_THRESHOLD
+                        elseif remaining > ADVANCED_FISHING_SUPPORT_DURATION_THRESHOLD then
+                            -- Safety net in case we missed the initial high reading.
+                            fishingSupportState.advanced = true
+                        end
+
+                        if fishingSupportState.advanced then
+                            total = total + ADVANCED_FISHING_SUPPORT_BONUS
+                        else
+                            total = total + FISHING_SUPPORT_BONUS
+                        end
+                        break
+                    end
+                end
+            end
+
+            if not sawFishingImagery then
+                -- Buff expired or was replaced -- clear the latch so the next one
+                -- that appears gets evaluated fresh.
+                fishingSupportState.active   = false
+                fishingSupportState.advanced = false
             end
         end
 
