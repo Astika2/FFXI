@@ -1,3 +1,6 @@
+VERSION 4.9.13
+* Corrected detection of Fisherman's Gloves and Fisherman's Tunica. Minor bugfixes.
+
 VERSION 4.9.11
 * Suggested fish will now consider your EFFECTIVE skill (with gear and bonuses)
 
