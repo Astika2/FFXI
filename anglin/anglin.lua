@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.11.1'
+addon.version   = '4.0.13'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1043,6 +1043,7 @@ local function normalize_catch_name(name)
     n = n:gsub("^set of%s+", "")
     n = n:gsub("^bunch of%s+", "")
     n = n:gsub("^piece of%s+", "")
+    n = n:gsub("^clump of%s+", "")
     n = n:gsub("%s*%[.-%]%s*$", "") -- strip trailing tags like " [NM]" (guide names include these, actual catch names never do)
     return n
 end
@@ -1218,9 +1219,9 @@ end
 -- This list is the complete set of FISH (mod 127) items pulled directly from the
 -- server's item_mods.sql dump, so it should be exhaustive for this server.
 local FISHING_SKILL_GEAR = {
-    ["Fisherman's Tunica"] = 1,
+    ["Fsh. Tunica"] = 1,
     ["Angler's Tunica"]    = 1,
-    ["Fisherman's Gloves"] = 1,
+    ["Fsh. Gloves"] = 1,
     ["Angler's Gloves"]    = 1,
     ["Fisherman's Hose"]   = 1,
     ["Angler's Hose"]      = 1,
@@ -2367,8 +2368,17 @@ local function render_contest_window()
 
         if phaseName then
             -- Phase status box
+            -- Height is computed from the actual line height (which scales with
+            -- pref_FontScale) instead of a hardcoded pixel value, so the box
+            -- always fits its text without spawning a scrollbar. 3 lines
+            -- (phase / time remaining / next phase) plus, during
+            -- Accepting/Presenting, a separator + current-fish line.
+            local statusLineHeight = imgui.GetTextLineHeightWithSpacing()
+            local statusLines = (currentStatus == 2 or currentStatus == 4) and 5 or 3
+            local statusHeight = statusLines * statusLineHeight + 24 -- + child window padding (12 top + 12 bottom)
+
             imgui.PushStyleColor(ImGuiCol_ChildBg, getBackgroundColor(0.6))
-            if imgui.BeginChild("ContestStatus", { 0, 95 }, true) then
+            if imgui.BeginChild("ContestStatus", { 0, statusHeight }, true) then
 
                 -- Current phase
                 imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
