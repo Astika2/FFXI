@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.1'
+addon.version   = '4.1.1'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1699,33 +1699,48 @@ local function perform_update()
     end
 
     latestVersion = remote
+    local versionChanged = ver_gt(remote, CURRENT_VERSION)
 
-    if not ver_gt(remote, CURRENT_VERSION) then
+    -- Even when already on the latest version, back-fill any files that are
+    -- simply missing on disk -- e.g. a fresh install, or files that were
+    -- added in a later push than the one that last ran here.
+    local missingCount = 0
+    for _, f in ipairs(UPDATE_FILES) do
+        local existing = io.open(f.path, 'rb')
+        if existing then
+            existing:close()
+        else
+            missingCount = missingCount + 1
+        end
+    end
+
+    if not versionChanged and missingCount == 0 then
         echo(string.format('Already up to date. (v%s)', CURRENT_VERSION))
         return
     end
 
     local allOk = true
     local previousVersion = CURRENT_VERSION  -- capture before files are overwritten
-    local messages = { string.format('Downloading v%s...', remote) }
+    local messages
+    if versionChanged then
+        messages = { string.format('Downloading v%s...', remote) }
+    else
+        messages = { string.format('Already on v%s -- fetching %d missing file(s)...', CURRENT_VERSION, missingCount) }
+    end
     changelogMessages = nil
     changelogDelay    = nil
 
     for _, f in ipairs(UPDATE_FILES) do
-        -- onlyIfMissing entries (e.g. sounds\skillup.wav) are a one-time default:
-        -- fetched only if the player doesn't have one yet, never overwritten.
-        local alreadyPresent = false
-        if f.onlyIfMissing then
-            local existing = io.open(f.path, 'rb')
-            if existing then
-                existing:close()
-                alreadyPresent = true
-            end
-        end
+        local existing = io.open(f.path, 'rb')
+        local fileExists = existing ~= nil
+        if existing then existing:close() end
 
-        if alreadyPresent then
-            table.insert(messages, string.format('Skipped %s (already present).', f.label))
-        else
+        -- Always back-fill a file that's missing outright. Otherwise only
+        -- touch it on a real version bump, and never touch an onlyIfMissing
+        -- file (e.g. sounds\skillup.wav) that's already there.
+        local shouldFetch = (not fileExists) or (versionChanged and not f.onlyIfMissing)
+
+        if shouldFetch then
             local fok, fbody, fcode = pcall(function()
                 return https.request(f.url .. '?t=' .. os.time())
             end)
@@ -1757,16 +1772,20 @@ local function perform_update()
     end
 
     if allOk then
-        table.insert(messages, string.format('Update to v%s complete! Type: /addon reload anglin', remote))
-        updateAvailable = false
-        updateMessageDelay = nil
+        if versionChanged then
+            table.insert(messages, string.format('Update to v%s complete! Type: /addon reload anglin', remote))
+            updateAvailable = false
+            updateMessageDelay = nil
+        else
+            table.insert(messages, 'Missing files restored. Type: /addon reload anglin')
+        end
     end
 
     for _, msg in ipairs(messages) do
         echo(msg)
     end
 
-    if allOk then
+    if allOk and versionChanged then
         -- Fetch changelog and show all versions newer than what the player had
         local cok, cbody, ccode = pcall(function()
             return https.request(UPDATE_CHANGELOG_URL .. '?t=' .. os.time())
