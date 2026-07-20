@@ -1,3 +1,6 @@
+VERSION 4.1.1
+* BUGFIX: Updater will now properly pull all files
+
 VERSION 4.1
 * Added Isolating Baits tab
 
