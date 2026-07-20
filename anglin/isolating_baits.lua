@@ -1,3 +1,9 @@
+-- Auto-generated from fishing_bait_affinity.sql + fishing_group.sql.
+-- For each area, lists fish and the bait(s) that only that fish (of the
+-- fish sharing that area) will bite -- i.e. a bait that isolates it from
+-- everything else biting nearby. Within each fish, reusable lures are
+-- listed before consumable baits, then by power descending.
+-- Regenerate rather than hand-edit.
 local IsolatingBaits = {}
 
 IsolatingBaits["Aht Urhgan Whitegate, Whole Zone"] = {

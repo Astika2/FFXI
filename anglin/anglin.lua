@@ -1541,6 +1541,31 @@ local UPDATE_FILES = {
         path     = string.format('%s\\addons\\anglin\\data_manager.lua', AshitaCore:GetInstallPath()),
         label    = 'data_manager.lua',
     },
+    {
+        url      = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/isolating_baits.lua',
+        path     = string.format('%s\\addons\\anglin\\isolating_baits.lua', AshitaCore:GetInstallPath()),
+        label    = 'isolating_baits.lua',
+    },
+    {
+        url      = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/resources/checker_bg.png',
+        path     = string.format('%s\\addons\\anglin\\resources\\checker_bg.png', AshitaCore:GetInstallPath()),
+        label    = 'resources\\checker_bg.png',
+    },
+    {
+        url      = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/sounds/README.txt',
+        path     = string.format('%s\\addons\\anglin\\sounds\\README.txt', AshitaCore:GetInstallPath()),
+        label    = 'sounds\\README.txt',
+    },
+    {
+        url           = 'https://raw.githubusercontent.com/Astika2/FFXI/main/anglin/sounds/skillup.wav',
+        path          = string.format('%s\\addons\\anglin\\sounds\\skillup.wav', AshitaCore:GetInstallPath()),
+        label         = 'sounds\\skillup.wav',
+        -- Personal file (see sounds/README.txt): only fetch a default the
+        -- first time it's missing (fresh install). Never overwrite a file
+        -- that's already there -- that would silently destroy whatever
+        -- custom sound the player dropped in.
+        onlyIfMissing = true,
+    },
 }
 
 local updateAvailable = false
@@ -1687,25 +1712,48 @@ local function perform_update()
     changelogDelay    = nil
 
     for _, f in ipairs(UPDATE_FILES) do
-        local fok, fbody, fcode = pcall(function()
-            return https.request(f.url .. '?t=' .. os.time())
-        end)
-
-        if not fok or fcode ~= 200 or not fbody or fbody == '' then
-            table.insert(messages, string.format('Failed to download %s (HTTP %s). Update aborted.', f.label, tostring(fcode)))
-            allOk = false
-            break
+        -- onlyIfMissing entries (e.g. sounds\skillup.wav) are a one-time default:
+        -- fetched only if the player doesn't have one yet, never overwritten.
+        local alreadyPresent = false
+        if f.onlyIfMissing then
+            local existing = io.open(f.path, 'rb')
+            if existing then
+                existing:close()
+                alreadyPresent = true
+            end
         end
 
-        local out = io.open(f.path, 'wb')
-        if not out then
-            table.insert(messages, string.format('Cannot write %s. Check file permissions. Update aborted.', f.path))
-            allOk = false
-            break
+        if alreadyPresent then
+            table.insert(messages, string.format('Skipped %s (already present).', f.label))
+        else
+            local fok, fbody, fcode = pcall(function()
+                return https.request(f.url .. '?t=' .. os.time())
+            end)
+
+            if not fok or fcode ~= 200 or not fbody or fbody == '' then
+                table.insert(messages, string.format('Failed to download %s (HTTP %s). Update aborted.', f.label, tostring(fcode)))
+                allOk = false
+                break
+            end
+
+            -- Create the containing folder first (e.g. resources\, sounds\) --
+            -- a fresh install won't have them yet, and io.open() can't create
+            -- missing directories on its own. No-op if it already exists.
+            local dir = f.path:match('^(.*)\\[^\\]+$')
+            if dir then
+                os.execute(string.format('mkdir "%s" 2>nul', dir))
+            end
+
+            local out = io.open(f.path, 'wb')
+            if not out then
+                table.insert(messages, string.format('Cannot write %s. Check file permissions. Update aborted.', f.path))
+                allOk = false
+                break
+            end
+            out:write(fbody)
+            out:close()
+            table.insert(messages, string.format('Updated %s.', f.label))
         end
-        out:write(fbody)
-        out:close()
-        table.insert(messages, string.format('Updated %s.', f.label))
     end
 
     if allOk then
