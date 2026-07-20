@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.0.13'
+addon.version   = '4.1'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -14,6 +14,14 @@ local primitives = require('primitives')
 local settings = require('settings')
 local imgui    = require('imgui')
 local data     = require('data_manager')
+-- Attached to the existing `data` table (rather than a new top-level local)
+-- so it doesn't add another upvalue to the already-near-the-limit d3d_present
+-- render closure -- LuaJIT caps closures at 60 upvalues.
+data.isolatingBaits = require('isolating_baits')
+data.isolatingBaitFilters = {
+    fish = data.isolatingBaits.fishNames[1] or "",
+    hideNoUnique = false,
+}
 local json     = require('json')
 local https    = require('socket.ssl.https')
 local addon = { name = 'Anglin' }
@@ -1910,7 +1918,23 @@ local function load_prefs()
     end
 end
 
+-- Re-textures every background primitive to match the currently-loaded
+-- background image preferences. This is needed because init_background_prims()
+-- runs before load_prefs()/apply_prefs() during addon load, so the primitives
+-- are first created using the pre-load defaults. Without this, the background
+-- image (and the "off" state) would always revert to default on load/reload.
+local function apply_background_prefs()
+    local path = anglin_get_background_image_path()
+    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
+        local prim = backgroundPrims[key]
+        if prim then
+            pcall(function() prim.texture = path end)
+        end
+    end
+end
+
 local function apply_prefs()
+    apply_background_prefs()
     if pref_ColorTheme then
         if pref_ColorTheme == "Custom" then
             local primary = parseHexColor(pref_CustomColors.Primary)
@@ -3060,12 +3084,119 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     end
                 end
 
+                local function isolatingBaitPowerColor(power)
+                    if power >= 3 then
+                        return Colors.Success
+                    elseif power == 2 then
+                        return Colors.Accent
+                    else
+                        return Colors.TextMuted
+                    end
+                end
+
+                local function render_isolating_tab()
+                    if imgui.BeginTabItem("Isolating Baits") then
+                        activeGuideTab = "Isolating"
+
+                        drawSection("Filters")
+
+                        imgui.TextUnformatted("Fish:")
+                        imgui.SameLine()
+                        imgui.PushItemWidth(320)
+                        render_combo("##IsolatingFishFilter", data.isolatingBaits.fishNames, data.isolatingBaitFilters.fish, function(selected)
+                            data.isolatingBaitFilters.fish = selected
+                        end)
+                        imgui.PopItemWidth()
+
+                        local hideNoUnique = { data.isolatingBaitFilters.hideNoUnique }
+                        if imgui.Checkbox("Hide areas with no unique bait", hideNoUnique) then
+                            data.isolatingBaitFilters.hideNoUnique = hideNoUnique[1]
+                        end
+
+                        drawSection()
+
+                        local selectedFish = data.isolatingBaitFilters.fish
+                        local areaEntries = data.isolatingBaits.byFish[selectedFish] or {}
+                        local isolatableCount = 0
+                        for _, entry in ipairs(areaEntries) do
+                            if entry.isolatable then
+                                isolatableCount = isolatableCount + 1
+                            end
+                        end
+
+                        local normFish = normalize_catch_name(selectedFish)
+                        local isCaught = false
+                        for caughtFish, _ in pairs(data.state.lifetime.fishCaught) do
+                            if normalize_catch_name(caughtFish) == normFish then
+                                isCaught = true
+                                break
+                            end
+                        end
+                        local fishColor = isCaught and Colors.CaughtColor or Colors.UncaughtColor
+
+                        imgui.PushStyleColor(ImGuiCol_Text, fishColor)
+                        imgui.TextUnformatted(selectedFish)
+                        imgui.PopStyleColor()
+                        imgui.SameLine()
+                        imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+                        imgui.TextUnformatted(string.format(
+                            " -- found in %d area%s, isolatable in %d",
+                            #areaEntries, (#areaEntries == 1 and "" or "s"), isolatableCount))
+                        imgui.PopStyleColor()
+
+                        imgui.Spacing()
+
+                        if imgui.BeginChild("IsolatingBaitList", { 0, -40 }, true) then
+                            for _, entry in ipairs(areaEntries) do
+                                if entry.isolatable or not data.isolatingBaitFilters.hideNoUnique then
+                                    imgui.PushStyleColor(ImGuiCol_Text, Colors.TextPrimary)
+                                    imgui.TextUnformatted(entry.area)
+                                    imgui.PopStyleColor()
+
+                                    imgui.Indent()
+                                    if entry.isolatable then
+                                        for _, b in ipairs(entry.baits) do
+                                            imgui.PushStyleColor(ImGuiCol_Text, isolatingBaitPowerColor(b.power))
+                                            imgui.TextUnformatted(string.format(
+                                                "%s%s  (Power %d)",
+                                                b.bait, (b.lure and "  [Lure]" or ""), b.power))
+                                            imgui.PopStyleColor()
+                                        end
+                                    else
+                                        imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                                        imgui.TextUnformatted("No unique bait")
+                                        imgui.PopStyleColor()
+                                    end
+                                    imgui.Unindent()
+                                    imgui.Spacing()
+                                end
+                            end
+
+                            if #areaEntries == 0 then
+                                imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                                imgui.TextUnformatted("No area data for this fish.")
+                                imgui.PopStyleColor()
+                            end
+
+                            imgui.EndChild()
+                        end
+
+                        imgui.EndTabItem()
+                    end
+                end
+
                 if activeGuideTab == "Skillups" then
                     render_skillups_tab()
                     render_guide_tab()
+                    render_isolating_tab()
+                elseif activeGuideTab == "Isolating" then
+                    render_isolating_tab()
+                    render_guide_tab()
+                    render_skillups_tab()
                 else
                     render_guide_tab()
                     render_skillups_tab()
+                    render_isolating_tab()
                 end
 
                 imgui.EndTabBar()
