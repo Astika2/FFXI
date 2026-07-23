@@ -1,3 +1,6 @@
+VERSION 4.1.2
+* Price Check: Updated the NPC min sale price for Silver Sharks (from 500gil to 400gil)
+
 VERSION 4.1.1
 * BUGFIX: Updater will now properly pull all files
 
