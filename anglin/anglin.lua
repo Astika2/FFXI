@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.1.1'
+addon.version   = '4.1.2'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -491,7 +491,7 @@ local fishSellPrices = {
     ["Rusty Cap"]=97, ["Rusty Greatsword"]=86, ["Rusty Leggings"]=12, ["Rusty Pick"]=115,
     ["Rusty Subligar"]=15, ["Ryugu Titan"]=1500, ["Sandfish"]=26, ["Sazanbaligi"]=300,
     ["Sea Zombie"]=628, ["Shall Shell"]=300, ["Shining Trout"]=26, ["Silver Ring"]=250,
-    ["Silver Shark"]=500, ["Takitaro"]=714, ["Tarutaru Snare"]=0, ["Tavnazian Goby"]=400,
+    ["Silver Shark"]=400, ["Takitaro"]=714, ["Tarutaru Snare"]=0, ["Tavnazian Goby"]=400,
     ["Three-Eyed Fish"]=512, ["Three-eyed Fish"]=512, ["Tiger Cod"]=52,
     ["Tiny Goldfish"]=1, ["Titanic Sawfish"]=1652, ["Titanictus"]=700,
     ["Tricolored Carp"]=52, ["Tricorn"]=616, ["Trilobite"]=40, ["Trumpet Shell"]=512,
