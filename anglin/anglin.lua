@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.2'
+addon.version   = '4.1.3'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1598,8 +1598,12 @@ local function ver_gt(a, b)
     return false
 end
 
-local function echo(msg)
-    AshitaCore:GetChatManager():QueueCommand(1, '/echo [Anglin] ' .. msg)
+-- `delay` lets callers force strict ordering when queueing several lines back
+-- to back in the same frame -- QueueCommand doesn't guarantee FIFO for lines
+-- queued with identical timing, so batches (update status, changelog) should
+-- pass distinct, increasing delays.
+local function echo(msg, delay)
+    AshitaCore:GetChatManager():QueueCommand(delay or 1, '/echo [Anglin] ' .. msg)
 end
 
 -- ============================================================
@@ -1791,8 +1795,8 @@ local function perform_update()
         end
     end
 
-    for _, msg in ipairs(messages) do
-        echo(msg)
+    for i, msg in ipairs(messages) do
+        echo(msg, i)
     end
 
     if allOk and versionChanged then
@@ -4046,8 +4050,8 @@ end)
 
 ashita.events.register('d3d_present', 'anglin_changelog_flush', function()
     if changelogDelay and os.clock() >= changelogDelay and changelogMessages then
-        for _, msg in ipairs(changelogMessages) do
-            echo(msg)
+        for i, msg in ipairs(changelogMessages) do
+            echo(msg, i)
         end
         changelogMessages = nil
         changelogDelay    = nil
