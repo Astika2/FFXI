@@ -1598,12 +1598,13 @@ local function ver_gt(a, b)
     return false
 end
 
--- `delay` lets callers force strict ordering when queueing several lines back
--- to back in the same frame -- QueueCommand doesn't guarantee FIFO for lines
--- queued with identical timing, so batches (update status, changelog) should
--- pass distinct, increasing delays.
-local function echo(msg, delay)
-    AshitaCore:GetChatManager():QueueCommand(delay or 1, '/echo [Anglin] ' .. msg)
+-- Uses print() (synchronous, direct-to-chatlog) instead of QueueCommand's
+-- '/echo' -- QueueCommand doesn't guarantee FIFO order for several lines
+-- queued back to back in the same frame with identical timing, which was
+-- causing update-status and changelog lines to print out of order or not
+-- show up at all.
+local function echo(msg)
+    print('[Anglin] ' .. msg)
 end
 
 -- ============================================================
@@ -1795,8 +1796,8 @@ local function perform_update()
         end
     end
 
-    for i, msg in ipairs(messages) do
-        echo(msg, i)
+    for _, msg in ipairs(messages) do
+        echo(msg)
     end
 
     if allOk and versionChanged then
@@ -4050,8 +4051,8 @@ end)
 
 ashita.events.register('d3d_present', 'anglin_changelog_flush', function()
     if changelogDelay and os.clock() >= changelogDelay and changelogMessages then
-        for i, msg in ipairs(changelogMessages) do
-            echo(msg, i)
+        for _, msg in ipairs(changelogMessages) do
+            echo(msg)
         end
         changelogMessages = nil
         changelogDelay    = nil
