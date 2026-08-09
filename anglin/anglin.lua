@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.1.2'
+addon.version   = '4.1.3'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -240,9 +240,19 @@ local DEFAULT_BACKGROUND_IMAGE_PATH = BACKGROUND_RESOURCES_DIR .. 'checker_bg.pn
 local BACKGROUND_PRIM_KEYS = { 'contest', 'guide', 'stats', 'settings', 'hud' }
 local backgroundPrims = {}
 
+-- Dear ImGui 1.91.1+ renamed ImGuiChildFlags_Border -> ImGuiChildFlags_Borders and
+-- BeginChild's third argument is now an ImGuiChildFlags bitfield instead of a bool.
+-- NOTE: intentionally global (not local) so referencing these inside the huge
+-- d3d_present render function doesn't add upvalues and push it past LuaJIT's
+-- 60-upvalue-per-function limit.
+CHILD_FLAG_BORDER = ImGuiChildFlags_Borders or ImGuiChildFlags_Border or 1
+CHILD_FLAG_NONE = ImGuiChildFlags_None or 0
+
 local windowPosX = 100
 local function push_font()
-    imgui.SetWindowFontScale(pref_FontScale)
+    if imgui.SetWindowFontScale then
+        pcall(imgui.SetWindowFontScale, pref_FontScale)
+    end
 end
 
 local function pop_font()
@@ -2469,7 +2479,7 @@ local function render_contest_window()
             local statusHeight = statusLines * statusLineHeight + 24 -- + child window padding (12 top + 12 bottom)
 
             imgui.PushStyleColor(ImGuiCol_ChildBg, getBackgroundColor(0.6))
-            if imgui.BeginChild("ContestStatus", { 0, statusHeight }, true) then
+            if imgui.BeginChild("ContestStatus", { 0, statusHeight }, CHILD_FLAG_BORDER) then
 
                 -- Current phase
                 imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
@@ -2550,7 +2560,7 @@ local function render_contest_window()
         -- --------------------------------------------------------
         -- CONTEST FISH LIST
         -- --------------------------------------------------------
-        if imgui.BeginChild("ContestList", { 0, -40 }, false) then
+        if imgui.BeginChild("ContestList", { 0, -40 }, CHILD_FLAG_NONE) then
             for _, cf in ipairs(contestFish) do
                 local pb = data.state.personalBests and data.state.personalBests[cf.name]
 
@@ -2870,7 +2880,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             
             imgui.Spacing()
             
-            if imgui.BeginChild("GuideList", { 0, -40 }, true) then
+            if imgui.BeginChild("GuideList", { 0, -40 }, CHILD_FLAG_BORDER) then
                 for _, entry in ipairs(filteredList) do
                     local fish = entry.fish
                     local caught = entry.caught
@@ -3113,7 +3123,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                             imgui.PopStyleColor()
                             imgui.Spacing()
 
-                            if imgui.BeginChild("SkillupList", {0, -40}, false) then
+                            if imgui.BeginChild("SkillupList", {0, -40}, CHILD_FLAG_NONE) then
                                 for _, entry in ipairs(suggestions) do
                                     local fish = entry.fish
                                     local col = entry.caught and Colors.CaughtColor or Colors.UncaughtColor
@@ -3213,7 +3223,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
 
                         imgui.Spacing()
 
-                        if imgui.BeginChild("IsolatingBaitList", { 0, -40 }, true) then
+                        if imgui.BeginChild("IsolatingBaitList", { 0, -40 }, CHILD_FLAG_BORDER) then
                             for _, entry in ipairs(areaEntries) do
                                 if entry.isolatable or not data.isolatingBaitFilters.hideNoUnique then
                                     imgui.PushStyleColor(ImGuiCol_Text, Colors.TextPrimary)
@@ -3290,7 +3300,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
         imgui.PushStyleColor(ImGuiCol_Tab, Colors.BgMedium)
         imgui.PushStyleColor(ImGuiCol_TabHovered, Colors.PrimaryLight)
-        imgui.PushStyleColor(ImGuiCol_TabActive, Colors.Primary)
+        imgui.PushStyleColor(ImGuiCol_TabActive or ImGuiCol_TabSelected, Colors.Primary)
         imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
         imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 16, 16 })
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
@@ -3362,7 +3372,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         
                         if #dailyData.fishList > 0 then
                             imgui.Spacing()
-                            if imgui.BeginChild("DailyFishList", {0, 150}, true) then
+                            if imgui.BeginChild("DailyFishList", {0, 150}, CHILD_FLAG_BORDER) then
                                 for _, entry in ipairs(dailyData.fishList) do
                                     imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
                                 end
@@ -3377,7 +3387,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                             
                             if #dailyData.itemList > 0 then
                                 imgui.Spacing()
-                                if imgui.BeginChild("DailyItemList", {0, 100}, true) then
+                                if imgui.BeginChild("DailyItemList", {0, 100}, CHILD_FLAG_BORDER) then
                                     for _, entry in ipairs(dailyData.itemList) do
                                         imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
                                     end
@@ -3389,7 +3399,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     if imgui.CollapsingHeader("Bait Used") then
                         if #dailyData.baitList > 0 then
-                            if imgui.BeginChild("DailyBaitList", {0, 150}, true) then
+                            if imgui.BeginChild("DailyBaitList", {0, 150}, CHILD_FLAG_BORDER) then
                                 for _, entry in ipairs(dailyData.baitList) do
                                     imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
                                 end
@@ -3455,7 +3465,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                         
                         if #lifetimeData.fishList > 0 then
                             imgui.Spacing()
-                            if imgui.BeginChild("LifetimeFishList", {0, 200}, true) then
+                            if imgui.BeginChild("LifetimeFishList", {0, 200}, CHILD_FLAG_BORDER) then
                                 for _, entry in ipairs(lifetimeData.fishList) do
                                     imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
                                 end
@@ -3470,7 +3480,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                             
                             if #lifetimeData.itemList > 0 then
                                 imgui.Spacing()
-                                if imgui.BeginChild("LifetimeItemList", {0, 150}, true) then
+                                if imgui.BeginChild("LifetimeItemList", {0, 150}, CHILD_FLAG_BORDER) then
                                     for _, entry in ipairs(lifetimeData.itemList) do
                                         imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
                                     end
@@ -3482,7 +3492,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
                     
                     if imgui.CollapsingHeader("Bait Used") then
                         if #lifetimeData.baitList > 0 then
-                            if imgui.BeginChild("LifetimeBaitList", {0, 200}, true) then
+                            if imgui.BeginChild("LifetimeBaitList", {0, 200}, CHILD_FLAG_BORDER) then
                                 for _, entry in ipairs(lifetimeData.baitList) do
                                     imgui.BulletText(string.format("%s: %d", entry.name, entry.count))
                                 end
@@ -3931,12 +3941,8 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     end
 
     imgui.SetNextWindowSize({ 340, 0 }, ImGuiCond_Always)
-    local anglinOpen = { true }
-    imgui.Begin("Anglin", anglinOpen, bit.bor(ImGuiWindowFlags_NoCollapse, ImGuiWindowFlags_AlwaysAutoResize))
+    imgui.Begin("Anglin", nil, bit.bor(ImGuiWindowFlags_NoCollapse, ImGuiWindowFlags_AlwaysAutoResize))
     anglin_sync_background_prim('hud', true)
-    if not anglinOpen[1] then
-        reset_fishing_session()
-    end
 
     push_font()
     if previewMode then
@@ -4018,18 +4024,6 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     drawColoredText("Rod:", state.CurrentRod or "None", Colors.TextPrimary)
     drawColoredText("Bait:", state.CurrentBait or "None", Colors.TextPrimary)
     
-    imgui.Spacing()
-    imgui.Spacing()
-    if previewMode then
-        if modernButton("Close Settings", -1, 30) then
-            showSettings = false
-        end
-    else
-        if modernButton("Close", -1, 30) then
-            reset_fishing_session()
-        end
-    end
-
     local posX, posY = imgui.GetWindowPos()
     if posX ~= windowPosX or posY ~= windowPosY then
         windowPosX = posX
