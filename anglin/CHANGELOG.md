@@ -1,5 +1,5 @@
 VERSION 4.2
-* Fixed for ToAU release. If it doesn't work, please delete your imguistyle CONFIG folder to clear broken config, then load imguistyle to rebuild it. Anglin should work after that :) Reach out to Astika on discord if you need a hand sorting. Thanks!
+* Fixed for ToAU release. If it doesn't work, please delete your imguistyle CONFIG folder to clear broken config, then load imguistyle to rebuild it. Anglin should work after that. Reach out to Astika on discord if you need a hand sorting. Thanks!
 
 VERSION 4.1.2
 * Price Check: Updated the NPC min sale price for Silver Sharks (from 500gil to 400gil)
