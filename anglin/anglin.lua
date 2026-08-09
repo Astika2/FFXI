@@ -1850,6 +1850,63 @@ local function perform_update()
     end
 end
 
+-- Shows the changelog notes for a specific version on demand, regardless of
+-- what version is currently installed. Useful for re-checking notes for the
+-- version you're already on (perform_update only surfaces the changelog when
+-- it detects an actual version bump).
+local function show_changelog(targetVersion)
+    targetVersion = targetVersion or CURRENT_VERSION
+
+    local ok, body, code = pcall(function()
+        return https.request(UPDATE_CHANGELOG_URL .. '?t=' .. os.time())
+    end)
+
+    if not ok or code ~= 200 or not body then
+        echo('Could not reach GitHub to fetch the changelog.')
+        return
+    end
+
+    local sections = {}
+    local currentSection = nil
+    for line in body:gmatch('[^\r\n]+') do
+        local cleanLine = line:gsub('\r', '')
+        local ver = cleanLine:match('^VERSION%s+([%d%.]+)%s*$')
+        if ver then
+            if currentSection then
+                table.insert(sections, currentSection)
+            end
+            currentSection = { version = ver, notes = {} }
+        elseif currentSection and cleanLine:match('^%s*%*') then
+            table.insert(currentSection.notes, '  ' .. cleanLine:match('^%s*%*%s*(.+)'))
+        end
+    end
+    if currentSection then
+        table.insert(sections, currentSection)
+    end
+
+    local match = nil
+    for _, section in ipairs(sections) do
+        if section.version == targetVersion then
+            match = section
+            break
+        end
+    end
+
+    if not match then
+        echo(string.format('No changelog entry found for v%s.', targetVersion))
+        return
+    end
+
+    echo(string.format('v%s:', match.version))
+    if #match.notes == 0 then
+        echo('  (no notes listed)')
+    else
+        for _, note in ipairs(match.notes) do
+            echo(note)
+        end
+    end
+end
+
 local function reset_fishing_session()
     state.Hook = nil
     state.HookColor = nil
@@ -2703,7 +2760,7 @@ ashita.events.register('command', 'anglin_command', function(e)
     e.blocked = true
 
     if (#args == 1) then
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin suggest | /anglin contest | /anglin update')
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin suggest | /anglin contest | /anglin update | /anglin changelog [version]')
         return
     end
 
@@ -2748,6 +2805,11 @@ ashita.events.register('command', 'anglin_command', function(e)
 
     elseif subcmd == 'update' then
         perform_update()
+
+    elseif subcmd == 'changelog' then
+        -- /anglin changelog          -> notes for the currently installed version
+        -- /anglin changelog 4.1.3    -> notes for a specific version
+        show_changelog(args[3])
 
     elseif subcmd == 'contest' then
         showContest = not showContest
