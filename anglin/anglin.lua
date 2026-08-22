@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.1.3'
+addon.version   = '4.2'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -40,6 +40,9 @@ local Colors = {
     BgDark = 0x1A1A1A,
     BgMedium = 0x2D2D2D,
     BgLight = 0x3A3A3A,
+    BgLighter = 0x454545,        -- Frame hover background (unified theme)
+    BorderColor = 0x4A4A4A,      -- Neutral chrome: window/frame borders (unified theme)
+    BorderLight = 0x666666,      -- Neutral chrome: scrollbar/resize-grip hover (unified theme)
     Legendary = 0xFF7CE8FF,      -- Pale Gold
     Large = 0xFFFAC981,          -- Light Blue
     Small = 0xFFEFD966,          -- Cyan
@@ -808,6 +811,101 @@ local function getBackgroundColor(alpha)
         bit.lshift(math.floor(alpha * 255), 24),
         Colors.BgDark
     )
+end
+
+
+-- Colors.BgDark/BgMedium/BgLight/BgLighter/BorderColor/BorderLight are stored
+-- as bare RGB (no alpha byte set), same convention as getBackgroundColor above.
+-- These two helpers stamp on the alpha byte a raw RGB color is missing.
+local function solidColor(rgb)
+    return bit.bor(0xFF000000, rgb)
+end
+
+local function withAlpha(colorABGR, alpha01)
+    local rgb = bit.band(colorABGR, 0x00FFFFFF)
+    return bit.bor(bit.lshift(math.floor(alpha01 * 255), 24), rgb)
+end
+
+-- ImGui renamed a few Tab color slots between versions; fall back to the
+-- newer names if the old ones aren't defined (same pattern as
+-- CHILD_FLAG_BORDER elsewhere in this file).
+local COL_TAB_ACTIVE = ImGuiCol_TabActive or ImGuiCol_TabSelected
+local COL_TAB_UNFOCUSED = ImGuiCol_TabUnfocused or ImGuiCol_TabDimmed
+local COL_TAB_UNFOCUSED_ACTIVE = ImGuiCol_TabUnfocusedActive or ImGuiCol_TabDimmedSelected
+
+-- ============================================================
+-- UNIFIED ANGLIN THEME
+-- ------------------------------------------------------------
+-- Explicitly pushes every ImGui color slot Anglin's windows touch
+-- (frames, popups, headers, tabs, scrollbars, resize grip, etc.),
+-- built from the addon's own Colors table / active ColorTheme.
+-- This makes Anglin look the same regardless of the ambient ImGui
+-- style (i.e. whether or not an addon like imguistyle has set a
+-- dark theme) -- previously only buttons/title bars/borders were
+-- themed here, so unstyled widgets (checkboxes, combos, popups,
+-- scrollbars...) fell back to ImGui's default look and clashed.
+-- Call PushAnglinStyle() right after Begin-window style vars and
+-- PopAnglinStyle() opposite every imgui.End() that pairs with it.
+-- ============================================================
+local ANGLIN_STYLE_COLOR_COUNT = 35
+
+local function PushAnglinStyle(bgAlpha)
+    bgAlpha = bgAlpha or pref_Transparency
+
+    -- Text
+    imgui.PushStyleColor(ImGuiCol_Text, Colors.TextPrimary)
+    imgui.PushStyleColor(ImGuiCol_TextDisabled, Colors.TextMuted)
+
+    -- Windows / popups
+    imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(bgAlpha))
+    imgui.PushStyleColor(ImGuiCol_ChildBg, { 0, 0, 0, 0 })
+    imgui.PushStyleColor(ImGuiCol_PopupBg, solidColor(Colors.BgMedium))
+    imgui.PushStyleColor(ImGuiCol_Border, Colors.BorderColor)
+    imgui.PushStyleColor(ImGuiCol_BorderShadow, 0x00000000)
+
+    -- Frames (checkboxes, combos, text/color inputs, slider tracks)
+    imgui.PushStyleColor(ImGuiCol_FrameBg, solidColor(Colors.BgLight))
+    imgui.PushStyleColor(ImGuiCol_FrameBgHovered, solidColor(Colors.BgLighter))
+    imgui.PushStyleColor(ImGuiCol_FrameBgActive, solidColor(Colors.BgLighter))
+
+    -- Title bar
+    imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
+    imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
+    imgui.PushStyleColor(ImGuiCol_TitleBgCollapsed, solidColor(Colors.BgDark))
+
+    -- Interactive accents (checkmarks, sliders, buttons)
+    imgui.PushStyleColor(ImGuiCol_CheckMark, Colors.Primary)
+    imgui.PushStyleColor(ImGuiCol_SliderGrab, Colors.Primary)
+    imgui.PushStyleColor(ImGuiCol_SliderGrabActive, Colors.PrimaryDark)
+    imgui.PushStyleColor(ImGuiCol_Button, Colors.Primary)
+    imgui.PushStyleColor(ImGuiCol_ButtonHovered, Colors.PrimaryLight)
+    imgui.PushStyleColor(ImGuiCol_ButtonActive, Colors.PrimaryDark)
+
+    -- Headers (combo dropdown items, selectables)
+    imgui.PushStyleColor(ImGuiCol_Header, withAlpha(Colors.Primary, 0.25))
+    imgui.PushStyleColor(ImGuiCol_HeaderHovered, withAlpha(Colors.Primary, 0.45))
+    imgui.PushStyleColor(ImGuiCol_HeaderActive, withAlpha(Colors.Primary, 0.6))
+
+    -- Tabs
+    imgui.PushStyleColor(ImGuiCol_Tab, solidColor(Colors.BgMedium))
+    imgui.PushStyleColor(ImGuiCol_TabHovered, withAlpha(Colors.Primary, 0.45))
+    imgui.PushStyleColor(COL_TAB_ACTIVE, withAlpha(Colors.Primary, 0.3))
+    imgui.PushStyleColor(COL_TAB_UNFOCUSED, solidColor(Colors.BgDark))
+    imgui.PushStyleColor(COL_TAB_UNFOCUSED_ACTIVE, solidColor(Colors.BgMedium))
+
+    -- Neutral chrome: separators, scrollbars, resize grip
+    imgui.PushStyleColor(ImGuiCol_Separator, Colors.BorderColor)
+    imgui.PushStyleColor(ImGuiCol_ScrollbarBg, solidColor(Colors.BgDark))
+    imgui.PushStyleColor(ImGuiCol_ScrollbarGrab, solidColor(Colors.BorderColor))
+    imgui.PushStyleColor(ImGuiCol_ScrollbarGrabHovered, solidColor(Colors.BorderLight))
+    imgui.PushStyleColor(ImGuiCol_ScrollbarGrabActive, solidColor(Colors.BorderLight))
+    imgui.PushStyleColor(ImGuiCol_ResizeGrip, solidColor(Colors.BorderColor))
+    imgui.PushStyleColor(ImGuiCol_ResizeGripHovered, solidColor(Colors.BorderLight))
+    imgui.PushStyleColor(ImGuiCol_ResizeGripActive, solidColor(Colors.BorderLight))
+end
+
+local function PopAnglinStyle()
+    imgui.PopStyleColor(ANGLIN_STYLE_COLOR_COUNT)
 end
 
 local function modernButton(label, width, height)
@@ -2512,10 +2610,7 @@ local function render_contest_window()
     imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
     imgui.PushStyleVar(ImGuiStyleVar_FrameRounding, 4)
     imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 12, 12 })
-    imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(pref_Transparency))
-    imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
-    imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
-    imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
+    PushAnglinStyle()
 
     imgui.SetNextWindowSize({ 580, 560 }, ImGuiCond_FirstUseEver)
     local contestOpen = { showContest }
@@ -2750,7 +2845,7 @@ local function render_contest_window()
     end
 
     imgui.PopStyleVar(3)
-    imgui.PopStyleColor(4)
+    PopAnglinStyle()
 end
 
 
@@ -2824,42 +2919,11 @@ ashita.events.register('command', 'anglin_command', function(e)
     end
 end)
 
-ashita.events.register('d3d_present', 'anglin_render', function()
-    -- Default every background primitive to hidden; whichever windows actually draw
-    -- this frame will flip their own back on further down.
-    anglin_reset_background_prims_visibility()
-
-    -- Load contest cache and run update check as soon as playerName becomes available
-    if not contestCacheLoadAttempted and playerName and playerName ~= '' then
-        contestCacheLoadAttempted = true
-        if not contestCache.populated then
-            load_contest_cache()
-        end
-        -- Check for updates in case addon was loaded manually after login
-        -- (welcome message trigger won't fire in this case)
-        check_for_update()
-    end
-
-    if updateMessageDelay and os.clock() >= updateMessageDelay then
-        echo(string.format(
-            'Update available! Current: v%s  Latest: v%s  --  Type /anglin update to install.',
-            CURRENT_VERSION, latestVersion
-        ))
-        updateMessageDelay = nil
-    end
-
-    AnimState.hookPulse = (AnimState.hookPulse + 0.05) % (math.pi * 2)
-    if AnimState.catchFlash > 0 then
-        AnimState.catchFlash = math.max(0, AnimState.catchFlash - 0.02)
-    end
-
+local function render_guide_window()
     if showGuide then
         build_guide_filter_options()
         
-        imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(pref_Transparency))
-        imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
-        imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
-        imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
+        PushAnglinStyle()
         imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
         imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 16, 16 })
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
@@ -3358,16 +3422,13 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         end
         
         imgui.PopStyleVar(3)
-        imgui.PopStyleColor(4)
+        PopAnglinStyle()
     end
+end
+
+local function render_stats_window()
     if showStats then
-        imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(pref_Transparency))
-        imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
-        imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
-        imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
-        imgui.PushStyleColor(ImGuiCol_Tab, Colors.BgMedium)
-        imgui.PushStyleColor(ImGuiCol_TabHovered, Colors.PrimaryLight)
-        imgui.PushStyleColor(ImGuiCol_TabActive or ImGuiCol_TabSelected, Colors.Primary)
+        PushAnglinStyle()
         imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
         imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 16, 16 })
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
@@ -3613,13 +3674,13 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         end
         
         imgui.PopStyleVar(4)
-        imgui.PopStyleColor(7)
+        PopAnglinStyle()
     end
+end
+
+local function render_settings_window()
     if showSettings then
-        imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(0.95))
-        imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
-        imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
-        imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
+        PushAnglinStyle(0.95)
         imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
         imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 20, 20 })
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
@@ -3953,11 +4014,11 @@ ashita.events.register('d3d_present', 'anglin_render', function()
         end
         
         imgui.PopStyleVar(3)
-        imgui.PopStyleColor(4)
+        PopAnglinStyle()
 	end
+end
 
-    render_contest_window()
-
+local function render_main_window()
     local previewMode = showSettings and not state.Active
     if not state.Active and not previewMode then return end
     local entity = AshitaCore:GetMemoryManager():GetEntity()
@@ -3994,10 +4055,7 @@ ashita.events.register('d3d_present', 'anglin_render', function()
             end
         end
     end
-    imgui.PushStyleColor(ImGuiCol_WindowBg, getBackgroundColor(pref_Transparency))
-    imgui.PushStyleColor(ImGuiCol_TitleBg, Colors.Primary)
-    imgui.PushStyleColor(ImGuiCol_TitleBgActive, Colors.PrimaryDark)
-    imgui.PushStyleColor(ImGuiCol_Border, Colors.Primary)
+    PushAnglinStyle()
     imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
     imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 16, 16 })
     imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
@@ -4101,7 +4159,43 @@ ashita.events.register('d3d_present', 'anglin_render', function()
     pop_font()
     imgui.End()
     imgui.PopStyleVar(3)
-    imgui.PopStyleColor(4)
+    PopAnglinStyle()
+end
+
+ashita.events.register('d3d_present', 'anglin_render', function()
+    -- Default every background primitive to hidden; whichever windows actually draw
+    -- this frame will flip their own back on further down.
+    anglin_reset_background_prims_visibility()
+
+    -- Load contest cache and run update check as soon as playerName becomes available
+    if not contestCacheLoadAttempted and playerName and playerName ~= '' then
+        contestCacheLoadAttempted = true
+        if not contestCache.populated then
+            load_contest_cache()
+        end
+        -- Check for updates in case addon was loaded manually after login
+        -- (welcome message trigger won't fire in this case)
+        check_for_update()
+    end
+
+    if updateMessageDelay and os.clock() >= updateMessageDelay then
+        echo(string.format(
+            'Update available! Current: v%s  Latest: v%s  --  Type /anglin update to install.',
+            CURRENT_VERSION, latestVersion
+        ))
+        updateMessageDelay = nil
+    end
+
+    AnimState.hookPulse = (AnimState.hookPulse + 0.05) % (math.pi * 2)
+    if AnimState.catchFlash > 0 then
+        AnimState.catchFlash = math.max(0, AnimState.catchFlash - 0.02)
+    end
+
+    render_guide_window()
+    render_stats_window()
+    render_settings_window()
+    render_contest_window()
+    render_main_window()
 end)
 ashita.events.register('d3d_present', 'anglin_daily_check', function()
     local currentTime = os.time()
