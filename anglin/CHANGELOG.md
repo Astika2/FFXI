@@ -1,3 +1,6 @@
+VERSION 4.2
+* Removed dependancy on imguistyle. It should look pretty with or without it now. I learned some things. Thank you. I love you - say it back.
+
 VERSION 4.1.3
 * Fixed for ToAU release. If it doesn't work, please delete your imguistyle CONFIG folder to clear broken config, then load imguistyle to rebuild it. Anglin should work after that. Reach out to Astika on discord if you need a hand sorting. Thanks!
 
