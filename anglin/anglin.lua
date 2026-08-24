@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.2'
+addon.version   = '4.2.1'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -1354,15 +1354,87 @@ local FISHING_SKILL_GEAR_CONDITIONAL = {
     ["Trainee's Spectacles"] = { bonus = 1, maxSkill = 40 },
 }
 
--- Key item ID 523 = MOGHANCEMENT_FISHING (Mog Garden active effect), confirmed
--- straight from the server source (src/map/items/item_furnishing.h):
---   MOGHANCEMENT_FISHING      = 523, // Increases your fishing skill by 1
---   MOGHANCEMENT_FISHING_ITEM = 534, // Increases the chances of finding items when fishing
--- CCharEntity::UpdateMoghancement() (charentity.cpp) casts these values straight to
--- KeyItem and adds them via charutils::addKeyItem, so HasKeyItem(523) is correct here.
--- (534 is the item-find variant and does not affect skill -- not used.)
-local MOGHANCEMENT_FISHING_KEY_ITEM_ID = 523
+-- Key item ID 523 = MOGHANCEMENT_FISHING is LandSandBoat's internal constant name
+-- for this effect (src/map/items/item_furnishing.h: "Increases your fishing skill
+-- by 1"), but that numeric ID is just a resource-table index -- it isn't guaranteed
+-- to be the same across every server codebase/fork/era, and this addon needs to work
+-- on servers that don't even run Mog Garden. So instead of trusting 523 blindly, we
+-- resolve the correct ID by NAME against Ashita's own client-side key item resource
+-- table (same approach Ashita's bundled 'itemwatch' addon uses to look up key items),
+-- matching the exact key item name FFXI shows under Key Items -> Active Effects:
+-- "Moghancement: Fishing Skill". 523 is kept only as a last-resort fallback in case
+-- that lookup ever fails to find a match.
+local MOGHANCEMENT_FISHING_SKILL_NAME_MATCH = "moghancement: fishing skill"
+local MOGHANCEMENT_FISHING_KEY_ITEM_ID_FALLBACK = 523
 local MOGHANCEMENT_FISHING_BONUS = 1
+local moghancementFishingSkillKeyItemId = nil -- nil = not yet resolved, false = resolved/not found
+
+-- Scans Ashita's client-side key item name table once for "Moghancement: Fishing
+-- Skill" and caches whichever ID it's actually at on this server/client, so the
+-- lookup below works no matter which server this addon runs on.
+local function resolve_moghancement_fishing_skill_key_item_id()
+    if moghancementFishingSkillKeyItemId ~= nil then
+        return moghancementFishingSkillKeyItemId
+    end
+    local ok, foundId = pcall(function()
+        local resMgr = AshitaCore:GetResourceManager()
+        if not resMgr then return nil end
+        for id = 0, 4096 do
+            local n = resMgr:GetString('keyitems.names', id)
+            if n and n:len() > 0 and n:lower():find(MOGHANCEMENT_FISHING_SKILL_NAME_MATCH, 1, true) then
+                return id
+            end
+        end
+        return nil
+    end)
+    moghancementFishingSkillKeyItemId = (ok and foundId) or false
+    return moghancementFishingSkillKeyItemId
+end
+
+-- CONFIRMED (via '/anglin logkeyitems' packet capture): this server DOES correctly
+-- sync "Moghancement: Fishing Skill" to the client -- Ashita's HasKeyItem() is just
+-- wrong for it here. The raw 0x55 (Key Items sync) packet decodes as (1-based byte
+-- positions, matching this file's read_int32/read_uint16 convention):
+--   bytes 1-4     : Header (opcode/sync -- not needed)
+--   bytes 5-68    : KeyItemAvailable, 64 bytes = 512 bits, one bit per key item
+--   bytes 69-132  : KeyItemExamined,  64 bytes = 512 bits (whether its description has
+--                   been viewed in the Key Items menu -- not needed here)
+--   byte  133     : Offset -- which 512-item "table" this packet covers; the key item
+--                   id for a given bit is Offset*512 + (bit position in KeyItemAvailable)
+--   bytes 134-136 : padding
+--   bytes 137-512 : unused -- the client always sends this packet as a fixed 512-byte
+--                   frame regardless of how much of it is meaningful
+-- This struct layout comes from the open-source 'FindAll' Ashita plugin (GitHub:
+-- ThornyFFXI/FindAll, InventoryCache.h/.cpp), which decodes this same packet to build
+-- its own key item cache -- confirmed against the user's own capture: table 1
+-- (ids 512-1023), bit 11 (id 523, "Moghancement: Fishing Skill") read as SET in the
+-- raw packet at the exact moment HasKeyItem(523) was reporting false in-game.
+local moghancementFishingSkillTable = nil    -- id >> 9, resolved lazily alongside the id above
+local moghancementFishingSkillBitIndex = nil -- id & 0x1FF
+local moghancementFishingSkillActive = false -- live state, kept current from 0x55 packets
+
+local function ensure_moghancement_fishing_skill_packet_indices()
+    if moghancementFishingSkillTable ~= nil then return end
+    local id = resolve_moghancement_fishing_skill_key_item_id() or MOGHANCEMENT_FISHING_KEY_ITEM_ID_FALLBACK
+    if id then
+        moghancementFishingSkillTable = bit.rshift(id, 9)
+        moghancementFishingSkillBitIndex = bit.band(id, 0x1FF)
+    end
+end
+
+-- Called from the 'packet_in' handler for every 0x55 (Key Items sync) packet. Cheap
+-- (a handful of byte reads), so it runs unconditionally.
+local function handle_keyitem_sync_packet(data)
+    ensure_moghancement_fishing_skill_packet_indices()
+    if not moghancementFishingSkillTable or not data or #data < 133 then return end
+    local pktTable = string.byte(data, 133) -- Offset byte (1-based position of 0-based byte 132)
+    if pktTable ~= moghancementFishingSkillTable then return end
+    local byteIndex = bit.rshift(moghancementFishingSkillBitIndex, 3)
+    local bitIndex = bit.band(moghancementFishingSkillBitIndex, 7)
+    local b = string.byte(data, 5 + byteIndex) -- KeyItemAvailable starts at 1-based byte 5
+    if not b then return end
+    moghancementFishingSkillActive = bit.band(bit.rshift(b, bitIndex), 1) == 1
+end
 
 -- Fishing Support / Advanced Fishing Support (Fisherman's Guild NPCs) both apply the
 -- same status effect -- FISHING_IMAGERY, id 235 -- just with different power/duration
@@ -1419,7 +1491,14 @@ function anglin_get_fishing_skill_bonus()
 
         local player = AshitaCore:GetMemoryManager():GetPlayer()
         if player then
-            if MOGHANCEMENT_FISHING_KEY_ITEM_ID and player:HasKeyItem(MOGHANCEMENT_FISHING_KEY_ITEM_ID) then
+            -- HasKeyItem() doesn't reflect Moghancement: Fishing Skill on this server
+            -- (diagnosed by decoding a raw '/anglin logkeyitems' packet capture, and
+            -- cross-checked against FindAll, an independent third-party plugin using
+            -- the same API). Detection instead comes straight from the raw 0x55 Key
+            -- Items sync packet -- see handle_keyitem_sync_packet() above and its
+            -- packet_in hook below, which keep moghancementFishingSkillActive current
+            -- in real time.
+            if moghancementFishingSkillActive then
                 total = total + MOGHANCEMENT_FISHING_BONUS
             end
 
@@ -2463,7 +2542,45 @@ local function read_uint16(data, offset)
     return b0 + b1 * 256
 end
 
+-- Toggled by "/anglin logkeyitems" -- when on, every incoming 0x55 (Key Items sync)
+-- packet is hex-dumped to disk so we can inspect the raw bytes this server actually
+-- sends for Moghancement, since HasKeyItem doesn't reflect it. Off by default so it
+-- never touches disk during normal play.
+local logKeyItemPackets = false
+
+local function keyitem_log_path()
+    return settings.settings_path() .. 'anglin_keyitem_packets.log'
+end
+
+local function bytes_to_hex(data)
+    local out = {}
+    for i = 1, #data do
+        out[i] = string.format('%02X', string.byte(data, i))
+    end
+    return table.concat(out, ' ')
+end
+
 ashita.events.register('packet_in', 'anglin_packet_in', function(e)
+    -- 0x55: Key Items sync. Decoding the Moghancement: Fishing Skill bit runs every
+    -- time (see handle_keyitem_sync_packet() above); the hex-dump-to-disk logging
+    -- below stays opt-in via "/anglin logkeyitems" so it never touches disk otherwise.
+    if e.id == 0x55 then
+        handle_keyitem_sync_packet(e.data)
+    end
+    if logKeyItemPackets and e.id == 0x55 then
+        local ok, err = pcall(function()
+            local f = io.open(keyitem_log_path(), 'a')
+            if f then
+                f:write(string.format('[%s] len=%d bytes\n', os.date('%Y-%m-%d %H:%M:%S'), #e.data))
+                f:write(bytes_to_hex(e.data) .. '\n\n')
+                f:close()
+            end
+        end)
+        if not ok then
+            echo('Failed to write key item packet log: ' .. tostring(err))
+        end
+    end
+
     -- 0x34: Event start — captures status, fishId, criteria, measure
     if e.id == 0x34 then
         if not e.data or #e.data < 46 then return end
@@ -2855,7 +2972,7 @@ ashita.events.register('command', 'anglin_command', function(e)
     e.blocked = true
 
     if (#args == 1) then
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin suggest | /anglin contest | /anglin update | /anglin changelog [version]')
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin suggest | /anglin contest | /anglin update | /anglin changelog [version] | /anglin logkeyitems')
         return
     end
 
@@ -2910,6 +3027,17 @@ ashita.events.register('command', 'anglin_command', function(e)
         showContest = not showContest
         if not pref_SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Contest window toggled.')
+        end
+
+    elseif subcmd == 'logkeyitems' then
+        logKeyItemPackets = not logKeyItemPackets
+        if logKeyItemPackets then
+            echo('Key item packet logging ON. Every incoming Key Items sync packet will be')
+            echo('appended (as hex) to: ' .. keyitem_log_path())
+            echo('Zone or relog now so the server resends a full sync, then run')
+            echo('"/anglin logkeyitems" again to turn logging back off before sending me the file.')
+        else
+            echo('Key item packet logging OFF. Log saved at: ' .. keyitem_log_path())
         end
 
     else
