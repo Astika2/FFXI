@@ -1,3 +1,6 @@
+VERSION 4.2.2
+* Guide updated to default to filter to current zone. Minor bugfix to location filtering. Reclassified Denizanasi as an ITEM.
+
 VERSION 4.2.1
 * Fixed anglin not detecting Moghancement: Fishing properly since the TOaU/Ashita update. This should now be reflected in your + fishing skill displayed.
 
