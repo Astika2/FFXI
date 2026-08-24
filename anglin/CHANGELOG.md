@@ -1,3 +1,6 @@
+VERSION 4.2.1
+* Fixed anglin not detecting Moghancement: Fishing properly since the TOaU/Ashita update. This should now be reflected in your + fishing skill displayed.
+
 VERSION 4.2
 * Removed dependancy on imguistyle. It should look pretty with or without it now. I learned some things. Thank you. I love you - say it back.
 
