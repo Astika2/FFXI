@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.2.1'
+addon.version   = '4.2.2'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -266,6 +266,7 @@ local showSettings = false
 local showStats = false
 local showGuide = false
 local showContest = false
+local guideNeedsZoneFilter = false  -- set true whenever the guide window is opened, so it can default to the current zone
 
 -- Phase durations in seconds (from fishing_contest.lua interval table)
 local CONTEST_PHASE_DURATIONS = {
@@ -648,7 +649,7 @@ local fishingGuide = {
 	{ name = "Copper ring", skill = 24, location = "Bastok Markets, Bastok Mines, Beaucedine Glacier, Bostaunieux Oubliette, Buburimu Peninsula, Dragon's Aery, East Ronfaure, Eastern Altepa Desert, Fei'Yin, Heavens Tower, Kazham, Lower Jeuno, Mhaura, Norg, Northern San d'Oria, Oldton Movalpolos, Port Jeuno, Qufim Island, Ro'Maeve, Ru'Aun Gardens, Temple of Uggalepih, The Boyahda Tree, The Shrine of Ru'Avitau, Yhoator Jungle, Yuhtunga Jungle", bait = "Any", rod = "Any", type = "Item" },
 	{ name = "Coral Fragment", skill = 74, location = "Bibiki Bay, Den of Rancor, Korroloka Tunnel, Labyrinth of Onzozo, Sea Serpent Grotto", bait = "Any", rod = "Any", notes = "Bibiki Bay: PI beaches only (not BB side). Den of Rancor: Pools E-8 and F-11 only (not Misc Water). Sea Serpent Grotto: not in Gold door area or Misc Puddles.", type = "Item" },
 	{ name = "Damp Scroll", skill = 20, location = "Sea Serpent Grotto", bait = "Any", rod = "Any", notes = "Sea Serpent Grotto: Pond Under a Bridge only.", type = "Item" },
-	{ name = "Denizanasi", skill = 5, location = "Aht Urhgan Whitegate, Mount Zhayolm", bait = "Ball of Crayfish Paste, Ball of Insect Paste, Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Frog Lure, Little Worm, Lizard Lure, Lufaise Fly, Lugworm, Meatball, Minnow, Peeled Crayfish, Peeled Lobster, Robber Rig, Rogue Rig, Sabiki Rig, Shell Bug, Shrimp Lure, Sinking Minnow, Slice Of Bluetail, Slice Of Carp, Slice Of Cod, Slice of Sardine, Worm Lure", rod = "Halcyon Rod", type = "Fish" },
+	{ name = "Denizanasi", skill = 5, location = "Aht Urhgan Whitegate, Mount Zhayolm", bait = "Ball of Crayfish Paste, Ball of Insect Paste, Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Frog Lure, Little Worm, Lizard Lure, Lufaise Fly, Lugworm, Meatball, Minnow, Peeled Crayfish, Peeled Lobster, Robber Rig, Rogue Rig, Sabiki Rig, Shell Bug, Shrimp Lure, Sinking Minnow, Slice Of Bluetail, Slice Of Carp, Slice Of Cod, Slice of Sardine, Worm Lure", rod = "Halcyon Rod", type = "Item" },
 	{ name = "Fish Scale Shield", skill = 7, location = "Bibiki Bay, Den of Rancor, Qufim Island, Rolanberry Fields", bait = "Any", rod = "Any", type = "Item" },
 	{ name = "Gil", skill = 1, location = "Port Windurst", bait = "Any", rod = "Any", type = "Item" },
 	{ name = "Hydrogauge", skill = 7, location = "Aht Urhgan Whitegate, Al Zahbi, Nashmau, Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Any", rod = "Any", type = "Item" },
@@ -1193,7 +1194,15 @@ local function get_filtered_guide_enhanced()
         end
         
         if passesFilter and currentLocation ~= "All" then
-            if not fish.location:find(currentLocation, 1, true) then
+            local locationMatch = false
+            for location in fish.location:gmatch("[^,]+") do
+                location = location:match("^%s*(.-)%s*$")
+                if location == currentLocation then
+                    locationMatch = true
+                    break
+                end
+            end
+            if not locationMatch then
                 passesFilter = false
             end
         end
@@ -1278,6 +1287,46 @@ local function update_player_name()
         local pname = partyMgr:GetMemberName(0)
         if pname and pname ~= '' then playerName = pname end
     end
+end
+
+-- Returns the player's current zone name (e.g. "Al Zahbi"), or nil if it can't be determined.
+local function get_current_zone_name()
+    local ok, zoneId = pcall(function()
+        return AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0)
+    end)
+    if not ok or not zoneId then return nil end
+
+    local resMgr = AshitaCore:GetResourceManager()
+    if not resMgr then return nil end
+
+    local ok2, zoneName = pcall(function()
+        return resMgr:GetString('zones.names', zoneId)
+    end)
+    if not ok2 or not zoneName or zoneName == '' then return nil end
+
+    return zoneName
+end
+
+-- Finds the guide's location-filter option that matches the given zone name, if any.
+-- Matches exactly first, then falls back to a case-insensitive match to absorb any
+-- casing differences between Ashita's zone strings and the guide's location data.
+local function find_guide_location_option(zoneName)
+    if not zoneName or zoneName == "" then return nil end
+
+    for _, option in ipairs(guideFilterOptionsCache.locations) do
+        if option == zoneName then
+            return option
+        end
+    end
+
+    local lowerZone = zoneName:lower()
+    for _, option in ipairs(guideFilterOptionsCache.locations) do
+        if option:lower() == lowerZone then
+            return option
+        end
+    end
+
+    return nil
 end
 
 -- Fish stock restocks at these Vana'diel hours (server-side restock ticks)
@@ -2998,6 +3047,7 @@ ashita.events.register('command', 'anglin_command', function(e)
             activeGuideTab = "Guide"
             guideTabBarId = guideTabBarId + 1
             showGuide = true
+            guideNeedsZoneFilter = true
         end
         if not pref_SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
@@ -3010,6 +3060,7 @@ ashita.events.register('command', 'anglin_command', function(e)
             activeGuideTab = "Skillups"
             guideTabBarId = guideTabBarId + 1  -- new ID = fresh tab state
             showGuide = true
+            guideNeedsZoneFilter = true
         end
         if not pref_SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
@@ -3050,7 +3101,16 @@ end)
 local function render_guide_window()
     if showGuide then
         build_guide_filter_options()
-        
+
+        if guideNeedsZoneFilter then
+            guideNeedsZoneFilter = false
+            local zoneName = get_current_zone_name()
+            local matchedLocation = find_guide_location_option(zoneName)
+            if matchedLocation then
+                guideFilters.location = matchedLocation
+            end
+        end
+
         PushAnglinStyle()
         imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
         imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 16, 16 })
