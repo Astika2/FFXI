@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.2.2'
+addon.version   = '4.3'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -10,7 +10,8 @@ local CURRENT_VERSION = addon.version
 require('common')
 local timelib = require('ffxi.time')
 local fonts      = require('fonts')
-local primitives = require('primitives')
+local ffi        = require('ffi')
+local d3d8       = require('d3d8')
 local settings = require('settings')
 local imgui    = require('imgui')
 local data     = require('data_manager')
@@ -234,14 +235,13 @@ local pref_Transparency  = 0.92
 local pref_FontScale     = 1.15
 local pref_CustomColors  = { Primary = "FFB974FF", PrimaryDark = "D69954FF", PrimaryLight = "FFD49FFF" }
 
--- Background image (behind each Anglin window, via the primitives library since
--- ImGui itself has no notion of a window "backdrop" image).
+-- Background image (behind each Anglin window, drawn via ImGui's own draw-list
+-- image calls since ImGui itself has no notion of a window "backdrop" image).
 local pref_BackgroundImageEnabled = true
 local pref_CustomBackgroundImage = "" -- filename only, resolved inside resources/; blank = use the default checker
+local pref_BackgroundFitMode = "Stretch" -- "Stretch" | "Center" | "Tile"
 local BACKGROUND_RESOURCES_DIR = string.format('%saddons/anglin/resources/', AshitaCore:GetInstallPath())
 local DEFAULT_BACKGROUND_IMAGE_PATH = BACKGROUND_RESOURCES_DIR .. 'checker_bg.png'
-local BACKGROUND_PRIM_KEYS = { 'contest', 'guide', 'stats', 'settings', 'hud' }
-local backgroundPrims = {}
 
 -- Dear ImGui 1.91.1+ renamed ImGuiChildFlags_Border -> ImGuiChildFlags_Borders and
 -- BeginChild's third argument is now an ImGuiChildFlags bitfield instead of a bool.
@@ -478,9 +478,9 @@ local baitTypes = {
 local fishSellPrices = {
     ["Ahtapot"]=700, ["Alabaligi"]=98, ["Arrowwood Log"]=5, ["Armored Pisces"]=969,
     ["Bastore Bream"]=600, ["Bastore Sardine"]=9, ["Betta"]=400, ["Bhefhel Marlin"]=307,
-    ["Bibiki Urchin"]=750, ["Bibikibo"]=99, ["Black Eel"]=192, ["Black Ghost"]=600,
+    ["Bibiki Urchin"]=750, ["Bibikibo"]=99, ["Black Bubble-Eye"]=9, ["Black Eel"]=192, ["Black Ghost"]=600,
     ["Black Sole"]=700, ["Bladefish"]=408, ["Blindfish"]=229, ["Bluetail"]=300,
-    ["Brass Loach"]=276, ["Bugbear Mask"]=0, ["Ca Cuong"]=560, ["Caedarva Frog"]=100,
+    ["Brass Loach"]=276, ["Bugbear Mask"]=0, ["Ca Cuong"]=560, ["Calico Comet"]=13, ["Caedarva Frog"]=100,
     ["Cave Cherax"]=1600, ["Cheval Salmon"]=20, ["Cobalt Jellyfish"]=8,
     ["Cone Calamary"]=165, ["Copper Frog"]=20, ["Copper Ring"]=19, ["Coral Butterfly"]=127,
     ["Coral Fragment"]=1750, ["Crayfish"]=10, ["Crescent Fish"]=403, ["Crystal Bass"]=0,
@@ -494,12 +494,12 @@ local fishSellPrices = {
     ["Hydrogauge"]=0, ["Icefish"]=156, ["Istakoz"]=200, ["Istavrit"]=100,
     ["Istiridye"]=279, ["Jungle Catfish"]=612, ["Kalamar"]=170, ["Kalkanbaligi"]=780,
     ["Kaplumbaga"]=830, ["Kayabaligi"]=310, ["Kilicbaligi"]=450, ["Lakerda"]=103,
-    ["Lamp Marimo"]=786, ["Lik"]=1760, ["Lungfish"]=231, ["Matsya"]=25688,
+    ["Lamp Marimo"]=786, ["Lik"]=1760, ["Lionhead"]=13, ["Lungfish"]=231, ["Matsya"]=25688,
     ["Megalodon"]=864, ["Mercanbaligi"]=600, ["Mithra Snare"]=0, ["Moat Carp"]=10,
     ["Moblin Mask"]=0, ["Mola Mola"]=975, ["Monke-Onke"]=306, ["Moorish Idol"]=242,
     ["Morinabaligi"]=548, ["Muddy Siredon"]=0, ["Mythril Dagger"]=1431,
     ["Mythril Sword"]=4100, ["Nebimonite"]=52, ["Noble Lady"]=400, ["Norg Shell"]=500,
-    ["Nosteau Herring"]=80, ["Ogre Eel"]=32, ["Pamtam Kelp"]=8, ["Phanauet Newt"]=4,
+    ["Nosteau Herring"]=80, ["Ogre Eel"]=32, ["Pamtam Kelp"]=8, ["Pearlscale"]=13, ["Phanauet Newt"]=4,
     ["Pipira"]=46, ["Pirarucu"]=901, ["Pterygotus"]=750, ["Quus"]=20,
     ["Red Terrapin"]=306, ["Rhinochimera"]=613, ["Ripped Cap"]=0, ["Rusty Bucket"]=51,
     ["Rusty Cap"]=97, ["Rusty Greatsword"]=86, ["Rusty Leggings"]=12, ["Rusty Pick"]=115,
@@ -551,6 +551,7 @@ local fishingGuide = {
 	{ name = "Bhefhel Marlin", skill = 61, location = "Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Slice of Bluetail", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Bibiki Urchin", skill = 3, location = "Bibiki Bay, Manaclipper", bait = "Any", rod = "Halcyon Rod", notes = "Bibiki Bay: PI beaches only (South/North/West/East) - not available on BB side.", type = "Fish" },
 	{ name = "Bibikibo", skill = 8, location = "Bibiki Bay, Manaclipper", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Bibiki Bay: PI - South Beach only (not North/West/East Beach and not BB side).", type = "Fish" },
+	{ name = "Black Bubble-Eye", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", type = "Fish" },
 	{ name = "Black Eel", skill = 47, location = "Bastok Markets, Gusgen Mines, Korroloka Tunnel, North Gustaberg, Oldton Movalpolos, Palborough Mines, Zeruhn Mines", bait = "Ball of Crayfish Paste, Shell Bug", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Black Ghost", skill = 88, location = "Caedarva Mire", bait = "Minnow", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Black Sole", skill = 96, location = "Batallia Downs, Beaucedine Glacier, Lower Jeuno, Port Jeuno, Qufim Island, Sauromugue Champaign", bait = "Sinking Minnow", rod = "Halcyon Rod", notes = "Beaucedine Glacier: Seaside only (not Ponds).", type = "Fish" },
@@ -558,6 +559,7 @@ local fishingGuide = {
 	{ name = "Blindfish", skill = 28, location = "Aydeewa Subterrane, Oldton Movalpolos", bait = "Ball of Insect Paste", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Bluetail", skill = 55, location = "Batallia Downs, Beaucedine Glacier, Bibiki Bay, Buburimu Peninsula, Den of Rancor, East Sarutabaruta, Manaclipper, Qufim Island, Sauromugue Champaign, Sea Serpent Grotto, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates), West Sarutabaruta", bait = "Minnow", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Bibiki Bay: PI - North/West/East Beach only (not PI - South Beach or BB side). Den of Rancor: Pools E-8 and F-11 (not Misc Water). Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only.", type = "Fish" },
 	{ name = "Caedarva Frog", skill = 30, location = "Caedarva Mire", bait = "Fly Lure", rod = "Halcyon Rod", type = "Fish" },
+	{ name = "Calico Comet", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", type = "Fish" },
 	{ name = "Cave Cherax", skill = 130, location = "Aydeewa Subterrane, Kuftal Tunnel, Quicksand Caves", bait = "Meatball, Rotten Meat", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Cheval Salmon", skill = 21, location = "East Ronfaure, Ghelsba Outpost, Jugner Forest", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Ghelsba Outpost: River only (not ponds). Jugner Forest: River only (not lakes or springs).", type = "Fish" },
 	{ name = "Cone Calamary", skill = 48, location = "Batallia Downs, Beaucedine Glacier, Bibiki Bay, Manaclipper, Qufim Island, Sauromugue Champaign, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Minnow", rod = "Halcyon Rod", type = "Fish" },
@@ -599,6 +601,7 @@ local fishingGuide = {
 	{ name = "Lakerda", skill = 41, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Sinking Minnow", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Lamp Marimo", skill = 3, location = "Aydeewa Subterrane", bait = "Fly Lure, Lugworm, Sabiki Rig", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Lik", skill = 140, location = "Lufaise Meadows", bait = "Minnow, Sinking Minnow, Dwarf Pugil", rod = "Composite Fishing Rod", notes = "Lufaise Meadows: Leremieu Lagoon only (not Seaside or river).", type = "Fish", keyItem = "Serpent Rumors" },
+	{ name = "Lionhead", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", type = "Fish" },
 	{ name = "Lungfish", skill = 32, location = "Phanauet Channel", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Mercanbaligi", skill = 86, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Moat Carp", skill = 11, location = "Al Zahbi, Bastok Markets, Davoi, Dragon's Aery, East Sarutabaruta, Eastern Altepa Desert, Jugner Forest, Korroloka Tunnel, La Theine Plateau, Misareaux Coast, Northern San d'Oria, Port San d'Oria, Rabao, Rolanberry Fields, Temple of Uggalepih, The Boyahda Tree, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle, Zeruhn Mines", bait = "Ball of Insect Paste", rod = "Halcyon Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Davoi: Pond only (not waterfalls or other areas). Korroloka Tunnel: Salt Water side only.", type = "Fish" },
@@ -611,6 +614,7 @@ local fishingGuide = {
 	{ name = "Noble Lady", skill = 66, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Sinking Minnow", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Nosteau Herring", skill = 39, location = "Batallia Downs, Beaucedine Glacier, Lower Jeuno, Port Jeuno, Qufim Island", bait = "Ball of Sardine Paste, Lugworm, Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
 	{ name = "Ogre Eel", skill = 35, location = "East Sarutabaruta, South Gustaberg, West Sarutabaruta", bait = "Shrimp Lure", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). South Gustaberg and West Sarutabaruta: Seaside only.", type = "Fish" },
+	{ name = "Pearlscale", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", type = "Fish" },
 	{ name = "Phanauet Newt", skill = 4, location = "Carpenters' Landing, Phanauet Channel", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Carpenters' Landing: inland waterways only (not landing docks).", type = "Fish" },
 	{ name = "Pipira", skill = 29, location = "East Sarutabaruta, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle", bait = "Minnow", rod = "Halcyon Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Yhoator Jungle: Front of Temple - East Side only. Yuhtunga Jungle: Southwest Waterfall and Southwest Pond only (not Northeast Pond, Gremini Falls, or riverbanks).", type = "Fish" },
 	{ name = "Pterygotus", skill = 99, location = "Nashmau", bait = "Lugworm", rod = "Composite Fishing Rod", type = "Fish" },
@@ -628,7 +632,7 @@ local fishingGuide = {
 	{ name = "Tavnazian Goby", skill = 75, location = "Lufaise Meadows, Misareaux Coast", bait = "Minnow", rod = "Halcyon Rod", notes = "Lufaise Meadows: Leremieu Lagoon and Rafeloux River only (not Seaside). Misareaux Coast: Rafeloux River and Cascade Edellaine only (not Seaside).", type = "Fish" },
 	{ name = "Three-Eyed Fish", skill = 79, location = "Qufim Island", bait = "Minnow, Slice of Cod", rod = "Composite Fishing Rod", notes = "Qufim Island: Southwest Seaside only (not Northwest or other areas).", type = "Fish" },
 	{ name = "Tiger Cod", skill = 29, location = "Batallia Downs, Beaucedine Glacier, Lower Jeuno, Port Jeuno, Qufim Island, Sauromugue Champaign", bait = "Lugworm, Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Tiny Goldfish", skill = 20, location = "Al Zahbi", bait = "Ball of Insect Paste, Little Worm, Worm Lure", rod = "Halcyon Rod", type = "Fish" },
+	{ name = "Tiny Goldfish", skill = 20, location = "Al Zahbi, South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Ball of Insect Paste, Little Worm, Worm Lure, Super Scoop", rod = "Halcyon Rod, Goldfish Basket", notes = "Available in S.Gusta, W.Ron, and E.Saruta during the Sunbreeze Festival event using Goldfish Basket and Super Scoop", type = "Fish" },
 	{ name = "Titanic Sawfish", skill = 125, location = "Manaclipper", bait = "Meatball, Slice of Cod", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Titanictus", skill = 101, location = "Manaclipper, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Composite Fishing Rod", type = "Fish" },
 	{ name = "Tricolored Carp", skill = 27, location = "Bastok Markets, Davoi, East Ronfaure, Ghelsba Outpost, Giddeus, Gusgen Mines, Jugner Forest, North Gustaberg, Northern San d'Oria, Palborough Mines, Phanauet Channel, Port San d'Oria, The Boyahda Tree, Zeruhn Mines", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
@@ -953,7 +957,13 @@ local function drawSection(title)
     end
 end
 local function parseHexColor(hexString)
+    hexString = hexString:gsub("^%s+", ""):gsub("%s+$", "")
     hexString = hexString:gsub("^#", ""):gsub("^0x", "")
+    -- No alpha channel given (plain RRGGBB, the common web format): assume fully
+    -- opaque rather than silently rejecting the input and dropping the edit.
+    if #hexString == 6 then
+        hexString = hexString .. "FF"
+    end
     if #hexString ~= 8 then
         return nil
     end
@@ -1146,6 +1156,11 @@ end
 local function clean_fish_name(fishname)
     if not fishname then return "" end
     local cleaned = fishname:gsub("[%z\1-\31\127]", "")
+    -- The server occasionally injects a stray "?" into monster names in combat
+    -- text (e.g. "Bathybic ?Kulshedra", "Cyan ?Deep ?Crab" -- the same mob shows
+    -- up clean a moment later), almost certainly an encoding/width artifact.
+    -- Real fish/monster names never contain "?", so strip it unconditionally.
+    cleaned = cleaned:gsub("%?", "")
     cleaned = cleaned:gsub("!%p?%d+", "")
     cleaned = cleaned:gsub("!%d+", "")
     cleaned = cleaned:gsub("^%s+", "")
@@ -1156,6 +1171,15 @@ end
 local function normalize_catch_name(name)
     if not name then return "" end
     local n = name:lower()
+    -- Same stray-"?" artifact as clean_fish_name (see comment there). Stripping
+    -- it here too means catches already saved with the corrupted name (from
+    -- before this fix) still match the guide instead of needing to be re-caught.
+    n = n:gsub("%?", "")
+    -- Monster combat text captured via the "uses"/"readies" TP-move patterns
+    -- (see AwaitingMonsterName handling) keeps a leading "The " article that
+    -- guide names never have (e.g. "The Submarine Nipper" vs "Submarine
+    -- Nipper"), so strip it here too -- fixes already-saved catches as well.
+    n = n:gsub("^the%s+", "")
     n = n:gsub("^pair of%s+", "")
     n = n:gsub("^set of%s+", "")
     n = n:gsub("^bunch of%s+", "")
@@ -1163,6 +1187,47 @@ local function normalize_catch_name(name)
     n = n:gsub("^clump of%s+", "")
     n = n:gsub("%s*%[.-%]%s*$", "") -- strip trailing tags like " [NM]" (guide names include these, actual catch names never do)
     return n
+end
+
+-- Looks up a candidate name against the guide's Monster-type entries. Used to
+-- validate a name captured from combat text before recording it as a catch --
+-- see the AwaitingMonsterName handling below for why this matters.
+local function find_known_monster_name(candidate)
+    local normCandidate = normalize_catch_name(candidate)
+    if normCandidate == '' then return nil end
+    for _, fish in ipairs(fishingGuide) do
+        if fish.type == 'Monster' and normalize_catch_name(fish.name) == normCandidate then
+            return fish.name
+        end
+    end
+    return nil
+end
+
+-- Looks up a candidate catch name against the FULL guide (any type) and
+-- returns the guide's canonical spelling if found. Also tries a simple
+-- plural -> singular fold (stripping a trailing "s") because stackable
+-- catches are reported as "You caught 5 Bastore Sardines!" while single
+-- catches are "You caught a Bastore Sardine!" -- without this, the plural
+-- form gets recorded under a different key and silently splits the fish's
+-- catch count in two. Returns nil (leave the name as-is) for anything not
+-- in the guide, e.g. non-fish item catches.
+local function find_canonical_guide_name(candidate)
+    local norm = normalize_catch_name(candidate)
+    if norm == '' then return nil end
+    for _, fish in ipairs(fishingGuide) do
+        if normalize_catch_name(fish.name) == norm then
+            return fish.name
+        end
+    end
+    if norm:sub(-1) == 's' then
+        local singularNorm = norm:sub(1, -2)
+        for _, fish in ipairs(fishingGuide) do
+            if normalize_catch_name(fish.name) == singularNorm then
+                return fish.name
+            end
+        end
+    end
+    return nil
 end
 
 local function get_filtered_guide_enhanced()
@@ -1610,9 +1675,9 @@ end
 -- Background image helpers -- all global (not local) for the same reason as the
 -- fishing skill helpers above: the main render function sits at LuaJIT's 60-upvalue
 -- ceiling, and any new *local* referenced from inside it (pref_BackgroundImageEnabled,
--- backgroundPrims, etc.) would push it over. Routing everything through globals means
--- the render function only ever holds a reference to the global function itself, which
--- costs it nothing.
+-- backgroundTexture, etc.) would push it over. Routing everything through globals
+-- means the render function only ever holds a reference to the global function
+-- itself, which costs it nothing.
 function anglin_get_background_image_enabled()
     return pref_BackgroundImageEnabled
 end
@@ -1631,38 +1696,179 @@ function anglin_get_custom_background_image()
     return pref_CustomBackgroundImage
 end
 
--- anglin_set_background_image_enabled and anglin_set_custom_background_image are
--- defined further down (right after save_prefs), since save_prefs is a local
--- declared later in the file and Lua resolves locals lexically -- referencing it
--- from here would silently resolve to a nil global instead of the real function.
+-- === Background image rendering ============================================
+-- Drawn directly via ImGui draw-list image calls, not the primitives library.
+-- The primitives library's width/height turned out to define a *crop* window
+-- over the texture's native pixels rather than a target render size -- fine
+-- when a window happened to be exactly the image's native size, but anything
+-- smaller showed only a corner of the image instead of a scaled-down copy.
+-- ImDrawList:AddImage always maps a given UV rect onto a given screen rect
+-- (true stretch, no cropping), which is what Stretch/Center/Tile all need.
 
--- Syncs one background primitive to the currently-drawing ImGui window's position and
--- size (when visible=true), or hides it (when visible=false / the feature is off).
--- Must be called with visible=true from inside an active ImGui window context, i.e.
--- right after a successful imgui.Begin(), so GetWindowPos/GetWindowSize are valid.
-function anglin_sync_background_prim(key, visible)
-    local prim = backgroundPrims[key]
-    if not prim then return end
-    if not pref_BackgroundImageEnabled or not visible then
-        prim.visible = false
-        return
+local backgroundTexture = nil               -- { path, image, width, height }
+local backgroundTexturePendingRelease = nil -- held one extra frame so an in-flight draw call can't race the release
+local backgroundTextureWarnedPaths = {}     -- [path] = true once we've logged a load failure for it, so it doesn't spam every frame
+
+-- Loads (or returns the already-cached) D3D texture for the given file path.
+-- Returns nil if the D3D device isn't ready yet, or the file can't be loaded
+-- (missing, corrupt, or an unsupported format for D3DX to decode). Wrapped in
+-- pcall since a bad FFI call here would otherwise throw all the way up through
+-- d3d_present and silently cancel every window's rendering for that frame --
+-- logs the failure (once per distinct path) via print() rather than staying
+-- silent, since "the image doesn't load" is otherwise undiagnosable from here.
+local function get_background_texture(path)
+    if backgroundTexture and backgroundTexture.path == path then
+        return backgroundTexture
     end
-    local wx, wy = imgui.GetWindowPos()
-    local ww, wh = imgui.GetWindowSize()
-    prim.position_x = wx
-    prim.position_y = wy
-    prim.width = ww
-    prim.height = wh
-    prim.visible = true
+
+    local device = d3d8.get_device()
+    if not device then
+        if not backgroundTextureWarnedPaths[path] then
+            backgroundTextureWarnedPaths[path] = true
+            print('[Anglin] Background image: D3D device not available yet, will retry.')
+        end
+        return nil
+    end
+
+    local ok, image, width, height, texRef = pcall(function()
+        local texPtrOut = ffi.new('IDirect3DTexture8*[1]')
+        local res = ffi.C.D3DXCreateTextureFromFileA(device, path, texPtrOut)
+        if res ~= ffi.C.S_OK then
+            error(string.format('D3DXCreateTextureFromFileA failed, HRESULT 0x%08X, path "%s"', bit.band(tonumber(res) or -1, 0xFFFFFFFF), path))
+        end
+        local img = d3d8.gc_safe_release(ffi.cast('IDirect3DTexture8*', texPtrOut[0]))
+        local w, h = 0, 0
+        local descRes, desc = img:GetLevelDesc(0)
+        if descRes == ffi.C.S_OK and desc then
+            w, h = desc.Width, desc.Height
+        end
+        -- AddImage's tex_ref parameter is a plain number, not the FFI cdata
+        -- pointer object itself -- convert once here rather than every draw.
+        local texRef = tonumber(ffi.cast('uint32_t', img))
+        return img, w, h, texRef
+    end)
+
+    if not ok then
+        if not backgroundTextureWarnedPaths[path] then
+            backgroundTextureWarnedPaths[path] = true
+            print('[Anglin] Background image failed to load: ' .. tostring(image))
+        end
+        return nil
+    end
+
+    -- The previous texture might still be referenced by a draw call queued
+    -- earlier this same frame -- don't drop Lua's hold on it until next frame.
+    if backgroundTexture then
+        backgroundTexturePendingRelease = backgroundTexture
+    end
+
+    backgroundTexture = { path = path, image = image, width = width, height = height, texRef = texRef }
+    backgroundTextureWarnedPaths[path] = nil -- loaded fine now; warn again if a future attempt at this path fails
+    return backgroundTexture
 end
 
--- Hides every background primitive. Called once at the top of each render pass so
--- any window that doesn't end up drawing this frame (closed, collapsed, etc.) simply
--- stays hidden by default instead of needing an explicit hide call at every possible
--- early-exit path.
-function anglin_reset_background_prims_visibility()
-    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
-        anglin_sync_background_prim(key, false)
+-- Call once per frame, before any window draws its background, so last
+-- frame's swapped-out texture (if any) is safe to garbage-collect -- by now
+-- every draw call that could have referenced it has already been submitted.
+function anglin_flush_background_texture_release()
+    backgroundTexturePendingRelease = nil
+end
+
+-- Drops anglin's hold on the background texture entirely. Call on addon unload.
+function anglin_release_background_texture()
+    backgroundTexture = nil
+    backgroundTexturePendingRelease = nil
+end
+
+-- White tinted by the Window Transparency slider's alpha, so the background
+-- image itself fades along with the window fill (as the Settings tooltip
+-- claims it does) instead of always drawing fully opaque.
+local function background_image_tint()
+    return bit.bor(bit.lshift(math.floor(pref_Transparency * 255), 24), 0x00FFFFFF)
+end
+
+-- Scales imgW x imgH down (preserving aspect ratio, never upscaling) so it fits
+-- entirely within maxW x maxH. Used by Center so it never draws past a window's
+-- edge without distorting the image.
+local function fit_within_bounds(imgW, imgH, maxW, maxH)
+    local scale = math.min(1.0, maxW / imgW, maxH / imgH)
+    return imgW * scale, imgH * scale
+end
+
+-- Tile mode should visibly repeat the image, not draw one native-size copy that
+-- might barely fit (or not fit at all). Shrinks the tile unit -- preserving
+-- aspect ratio, never upscaling -- just enough to guarantee at least
+-- MIN_TILES_PER_AXIS copies along whichever window dimension is more cramped
+-- relative to the image. An image that already tiles densely at native size is
+-- left alone. cols/rows are additionally capped as a sanity limit on how many
+-- AddImage calls one frame can issue for a single window.
+local MIN_TILES_PER_AXIS = 3
+local MAX_TILE_COLS = 12
+local MAX_TILE_ROWS = 10
+
+local function fit_tile_unit(imgW, imgH, ww, wh)
+    local scale = math.min(1.0, ww / (imgW * MIN_TILES_PER_AXIS), wh / (imgH * MIN_TILES_PER_AXIS))
+    return imgW * scale, imgH * scale
+end
+
+-- Draws the background image (Stretch/Center/Tile, per pref_BackgroundFitMode)
+-- behind whatever the current window draws next. Must be called right after a
+-- successful imgui.Begin(), before any of the window's own content -- that's
+-- both how GetWindowPos/GetWindowSize get the right rect, and how the image
+-- ends up visually behind everything drawn after it in the same window.
+local backgroundDrawWarned = false -- logs at most once; a broken draw call would otherwise throw every frame
+
+function anglin_draw_window_background()
+    if not pref_BackgroundImageEnabled then return end
+
+    local path = anglin_get_background_image_path()
+    local tex = get_background_texture(path)
+    if not tex then return end -- couldn't load this image at all -- nothing to draw
+
+    local ok, err = pcall(function()
+        local wx, wy = imgui.GetWindowPos()
+        local ww, wh = imgui.GetWindowSize()
+        local drawList = imgui.GetWindowDrawList()
+        if not drawList then return end
+
+        local tint = background_image_tint()
+        local texRef = tex.texRef
+
+        -- Explicit clip, independent of ImGui's own default window clip rect --
+        -- guarantees the image can never be drawn past the window's edge no
+        -- matter what fit mode or image size is in play.
+        drawList:PushClipRect({ wx, wy }, { wx + ww, wy + wh }, true)
+
+        if pref_BackgroundFitMode == 'Center' and tex.width > 0 and tex.height > 0 then
+            local drawW, drawH = fit_within_bounds(tex.width, tex.height, ww, wh)
+            local cx = wx + (ww - drawW) / 2
+            local cy = wy + (wh - drawH) / 2
+            drawList:AddImage(texRef, { cx, cy }, { cx + drawW, cy + drawH }, { 0, 0 }, { 1, 1 }, tint)
+
+        elseif pref_BackgroundFitMode == 'Tile' and tex.width > 0 and tex.height > 0 then
+            local tileW, tileH = fit_tile_unit(tex.width, tex.height, ww, wh)
+            local cols = math.min(MAX_TILE_COLS, math.max(1, math.floor(ww / tileW)))
+            local rows = math.min(MAX_TILE_ROWS, math.max(1, math.floor(wh / tileH)))
+            for row = 0, rows - 1 do
+                local ty = wy + row * tileH
+                for col = 0, cols - 1 do
+                    local tx = wx + col * tileW
+                    drawList:AddImage(texRef, { tx, ty }, { tx + tileW, ty + tileH }, { 0, 0 }, { 1, 1 }, tint)
+                end
+            end
+
+        else
+            -- Stretch (default, and the fallback for Center/Tile when the
+            -- texture's dimensions couldn't be read).
+            drawList:AddImage(texRef, { wx, wy }, { wx + ww, wy + wh }, { 0, 0 }, { 1, 1 }, tint)
+        end
+
+        drawList:PopClipRect()
+    end)
+
+    if not ok and not backgroundDrawWarned then
+        backgroundDrawWarned = true
+        print('[Anglin] Background image draw failed: ' .. tostring(err))
     end
 end
 
@@ -2197,6 +2403,7 @@ local function save_prefs()
     f:write(string.format('  SkillUpSoundEnabled = %s,\n',  tostring(state.SkillUpSoundEnabled == true)))
     f:write(string.format('  BackgroundImageEnabled = %s,\n', tostring(pref_BackgroundImageEnabled == true)))
     f:write(string.format('  CustomBackgroundImage = %q,\n', pref_CustomBackgroundImage or ""))
+    f:write(string.format('  BackgroundFitMode = %q,\n', pref_BackgroundFitMode or "Stretch"))
     f:write(string.format('  activeStatsTab     = %q,\n',   activeStatsTab))
     f:write('  CustomColors = {\n')
     f:write(string.format('    Primary      = %q,\n', cc.Primary      or 'FFB974FF'))
@@ -2212,19 +2419,22 @@ function anglin_set_background_image_enabled(value)
     save_prefs()
 end
 
+function anglin_get_background_fit_mode()
+    return pref_BackgroundFitMode
+end
+
+function anglin_set_background_fit_mode(mode)
+    pref_BackgroundFitMode = mode
+    save_prefs()
+end
+
 -- Sets the custom background image filename (expected to live in
 -- addons/anglin/resources/), or clears it back to the default checker when
--- passed an empty string. Retextures any already-created primitives live so
--- the change is visible without a reload.
+-- passed an empty string. anglin_draw_window_background() picks up the new
+-- path (and loads its texture) on its own the next time it runs -- no manual
+-- retexture step needed.
 function anglin_set_custom_background_image(filename)
     pref_CustomBackgroundImage = filename or ""
-    local path = anglin_get_background_image_path()
-    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
-        local prim = backgroundPrims[key]
-        if prim then
-            pcall(function() prim.texture = path end)
-        end
-    end
     save_prefs()
 end
 
@@ -2232,6 +2442,45 @@ end
 local function save_window_pos()
     save_prefs()
 end
+
+-- Ensures a prefs file exists on a genuine first run, without ever
+-- clobbering a real one that's already on disk. settings.settings_path()
+-- can still be resolving to a generic (non-character) folder immediately
+-- after 'load' fires -- if we blindly wrote here we could land on the
+-- correct per-character path a moment later and stomp yesterday's saved
+-- values with today's still-default in-memory ones before load_prefs()
+-- ever got a chance to read them back in.
+local function ensure_prefs_file_exists()
+    local path = get_prefs_file()
+    local f = io.open(path, 'r')
+    if f then
+        f:close()
+        return
+    end
+    save_prefs()
+end
+
+-- True once load_prefs() has actually found and parsed a real prefs file --
+-- lets load_cb tell 'we haven't confirmed the on-disk prefs yet' apart from
+-- 'we loaded them and they're just empty', so the end-of-load safety save
+-- never blindly persists in-memory defaults over a file it hasn't read.
+local prefsLoadedOk = false
+
+-- Name of the character prefs were last (re)loaded for. 'load' can fire
+-- before character select finishes (anglin auto-loads at Ashita boot), in
+-- which case settings.settings_path() is still pointing at a generic,
+-- non-character folder during load_cb's own load_prefs() call -- the
+-- addon's settings.register('settings', ...) callback is *supposed* to
+-- re-fire once the character is known, but that's Ashita's settings-hot-
+-- reload event, not a documented 'character known' event, so it isn't
+-- something to depend on alone. Detecting the character ourselves (the
+-- same partyMgr lookup update_player_name() already uses) and re-loading
+-- prefs right then is the reliable fix -- see anglin_prefs_char_sync below.
+-- Tracking the *name* rather than a one-shot flag also means logging out
+-- to character select and into an alt (no addon reload needed for that)
+-- correctly reloads that alt's own saved prefs instead of carrying over
+-- whichever character's settings happened to be in memory.
+local lastPrefsPlayerName = nil
 
 local function load_prefs()
     migrate_window_pos()
@@ -2241,6 +2490,7 @@ local function load_prefs()
     fCheck:close()
     local ok, result = pcall(dofile, path)
     if not (ok and type(result) == 'table') then return end
+    prefsLoadedOk = true
 
     windowPosX = result.window_x or windowPosX
     windowPosY = result.window_y or windowPosY
@@ -2273,6 +2523,9 @@ local function load_prefs()
     if result.CustomBackgroundImage ~= nil then
         pref_CustomBackgroundImage = result.CustomBackgroundImage
     end
+    if result.BackgroundFitMode ~= nil then
+        pref_BackgroundFitMode = result.BackgroundFitMode
+    end
     if result.activeStatsTab ~= nil then
         activeStatsTab = result.activeStatsTab
     end
@@ -2283,23 +2536,7 @@ local function load_prefs()
     end
 end
 
--- Re-textures every background primitive to match the currently-loaded
--- background image preferences. This is needed because init_background_prims()
--- runs before load_prefs()/apply_prefs() during addon load, so the primitives
--- are first created using the pre-load defaults. Without this, the background
--- image (and the "off" state) would always revert to default on load/reload.
-local function apply_background_prefs()
-    local path = anglin_get_background_image_path()
-    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
-        local prim = backgroundPrims[key]
-        if prim then
-            pcall(function() prim.texture = path end)
-        end
-    end
-end
-
 local function apply_prefs()
-    apply_background_prefs()
     if pref_ColorTheme then
         if pref_ColorTheme == "Custom" then
             local primary = parseHexColor(pref_CustomColors.Primary)
@@ -2330,56 +2567,12 @@ local function apply_prefs()
     end
 end
 
--- Creates one hidden primitive per Anglin window, ready to be positioned and
--- shown behind whichever windows are actually open each frame.
-local function init_background_prims()
-    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
-        local ok, prim = pcall(function()
-            local p = primitives.new({
-                texture_offset_x = 0.0,
-                texture_offset_y = 0.0,
-                border_visible   = false,
-                border_color     = 0x00000000,
-                border_flags     = 0,
-                border_sizes     = '0,0,0,0',
-                visible          = false,
-                position_x       = 0,
-                position_y       = 0,
-                can_focus        = false,
-                locked           = true,
-                lockedz          = true,
-                scale_x          = 1.0,
-                scale_y          = 1.0,
-                width            = 0.0,
-                height           = 0.0,
-                color            = 0xFFFFFFFF,
-            })
-            p.texture = anglin_get_background_image_path()
-            return p
-        end)
-        if ok then
-            backgroundPrims[key] = prim
-        end
-    end
-end
-
-local function destroy_background_prims()
-    for _, key in ipairs(BACKGROUND_PRIM_KEYS) do
-        local prim = backgroundPrims[key]
-        if prim then
-            pcall(function() prim:destroy() end)
-        end
-    end
-    backgroundPrims = {}
-end
-
 ashita.events.register('load', 'load_cb', function()
     update_player_name()
     state.Settings = settings.load(defaults)
     state.Font = fonts.new(state.Settings.Font)
     windowPosX = 100
     windowPosY = 100
-    init_background_prims()
     -- Register a callback so load_prefs runs again once the character is known
     -- and settings_path() returns the character-specific folder.
     settings.register('settings', 'anglin_prefs_cb', function()
@@ -2404,13 +2597,24 @@ ashita.events.register('load', 'load_cb', function()
         AshitaCore:GetChatManager():QueueCommand(1, '/echo [Anglin] Daily stats have been reset (new day in JST)')
     end)
 
+    -- Fires on the first login and on any later switch to an alt (log out to
+    -- character select, pick a different character, no addon reload needed).
+    -- Without this the Stats/Guide windows would keep rendering whatever was
+    -- cached for the previous character instead of the newly-loaded (or
+    -- freshly-reset, for an alt anglin has never seen) data.
+    data.set_player_switch_callback(function()
+        statsCache.dailyDirty = true
+        statsCache.lifetimeDirty = true
+        invalidate_guide_cache()
+    end)
+
     -- Init data: resolves path, migrates from old location if needed, then loads
     data.init(playerName)
     
     data.check_daily_reset()
 
-    -- Always write the prefs file on load so it exists even on first run.
-    save_prefs()
+    -- Ensure the prefs file exists even on first run, without overwriting a real one.
+    ensure_prefs_file_exists()
 end)
 
 ashita.events.register('unload', 'unload_cb', function()
@@ -2420,7 +2624,7 @@ ashita.events.register('unload', 'unload_cb', function()
     end
     save_prefs()
     data.save_state()
-    destroy_background_prims()
+    anglin_release_background_texture()
 end)
 
 ashita.events.register('text_in', 'anglin_HandleText', function(e)
@@ -2449,6 +2653,8 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
             state.BaitBeforeCast = state.CurrentBait
             if state.CurrentBait and state.CurrentBait ~= 'None' and state.CurrentBait ~= 'Unknown' then
                 data.record_bait_used(state.CurrentBait, 1)
+                statsCache.dailyDirty = true
+                statsCache.lifetimeDirty = true
             end
             AnimState.catchFlash = 0
             return
@@ -2468,9 +2674,15 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
         if count and fishName then
             fishName = fishName:match('^(.-)%s*,?%s*but cannot') or fishName
             fishName = clean_fish_name(fishName)
+            -- Stackable catches show up plural ("5 Bastore Sardines"); fold to
+            -- the guide's singular spelling so this doesn't split the count
+            -- away from single catches of the same fish.
+            fishName = find_canonical_guide_name(fishName) or fishName
             state.Fish = fishName
             state.CatchCount = tonumber(count)
             data.record_fish(fishName, state.CatchCount, state.IsItem)
+            statsCache.dailyDirty = true
+            statsCache.lifetimeDirty = true
             invalidate_guide_cache()
             AnimState.catchFlash = 1.0
             
@@ -2496,9 +2708,12 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
                 end
                 state.CloseTime = os.clock() + 8.0
             else
+                catchName = find_canonical_guide_name(catchName) or catchName
                 state.Fish = catchName
                 state.CatchCount = 1
                 data.record_fish(catchName, 1, state.IsItem)
+                statsCache.dailyDirty = true
+                statsCache.lifetimeDirty = true
                 invalidate_guide_cache()
                 AnimState.catchFlash = 1.0
                 if state.BaitBeforeCast and state.CurrentBaitType and state.CurrentBaitType.consumable then
@@ -2510,18 +2725,50 @@ ashita.events.register('text_in', 'anglin_HandleText', function(e)
         end
     end
     if state.AwaitingMonsterName and playerName then
+        -- Two tiers of patterns. The "player-scoped" ones are unambiguous --
+        -- they explicitly name the player as attacker or target, so in a busy
+        -- party/alliance log they can only be about *our* monster.
         local monsterName =
             cleanMsg:match('^The (.-)%s+misses%s+' .. playerName) or
             cleanMsg:match('^The (.-)%s+hits%s+' .. playerName) or
-            cleanMsg:match('^(.-)%s+uses%s') or
-            cleanMsg:match('^(.-)%s+readies%s')
+            cleanMsg:match('^You [%a%s]- the (.-) for %d+ points? of damage')
 
         if monsterName then
-            monsterName = monsterName:match('^%s*(.-)%s*$') -- trim
-            if monsterName ~= '' then
+            monsterName = clean_fish_name(monsterName)
+        end
+
+        if not monsterName or monsterName == '' then
+            -- These "ambient" patterns aren't scoped to the player at all --
+            -- '(.-) uses/readies/takes damage/falls/collapses/is defeated' will
+            -- happily match any other party/alliance member's ability line or
+            -- an unrelated mob in a group fight (e.g. "Luminas uses Third Eye."
+            -- right after your own catch message). Requiring the captured name
+            -- to be a known Monster-type guide entry before accepting it stops
+            -- those from hijacking the capture and locking out the real name.
+            local candidate =
+                cleanMsg:match('^(.-)%s+uses%s') or
+                cleanMsg:match('^(.-)%s+readies%s') or
+                cleanMsg:match('^(.-) takes %d+ points? of damage') or
+                cleanMsg:match('^(.-) falls to the ground%.?$') or
+                cleanMsg:match('^(.-) collapses%.?$') or
+                cleanMsg:match('^(.-) is defeated%.?$')
+
+            if candidate then
+                monsterName = find_known_monster_name(clean_fish_name(candidate))
+            end
+        end
+
+        if monsterName then
+            -- clean_fish_name/find_known_monster_name already strip the stray
+            -- "?" the server sometimes injects into monster names in combat
+            -- text (e.g. "Bathybic ?Kulshedra"), plus stray control chars and
+            -- trailing punctuation, so what gets recorded matches the guide.
+            if monsterName ~= '' and monsterName:lower() ~= 'you' then
                 state.Fish = monsterName
                 state.AwaitingMonsterName = false
                 data.record_fish(monsterName, 1, false)
+                statsCache.dailyDirty = true
+                statsCache.lifetimeDirty = true
                 invalidate_guide_cache()
                 state.CloseTime = os.clock() + 3.0
             end
@@ -2782,7 +3029,7 @@ local function render_contest_window()
     local contestOpen = { showContest }
     if imgui.Begin("Fishing Contest##anglin_contest", contestOpen) then
         showContest = contestOpen[1]
-        anglin_sync_background_prim('contest', true)
+        anglin_draw_window_background()
         push_font()
 
         -- --------------------------------------------------------
@@ -3120,7 +3367,7 @@ local function render_guide_window()
         local guideOpen = { showGuide }
         if imgui.Begin("Fishing Guide", guideOpen, ImGuiWindowFlags_NoCollapse) then
             showGuide = guideOpen[1]
-            anglin_sync_background_prim('guide', true)
+            anglin_draw_window_background()
             push_font()
 
             if imgui.BeginTabBar("GuideTabBar" .. guideTabBarId) then
@@ -3626,12 +3873,15 @@ local function render_stats_window()
         local statsOpen = { showStats }
         if imgui.Begin("Fishing Statistics", statsOpen, ImGuiWindowFlags_NoCollapse) then
             showStats = statsOpen[1]
-            anglin_sync_background_prim('stats', true)
+            anglin_draw_window_background()
             push_font()
             if imgui.BeginTabBar("StatsTabBar") then
                 local dailyTabFlags = (statsTabNeedsRestore and activeStatsTab == "Daily") and ImGuiTabItemFlags_SetSelected or 0
                 if imgui.BeginTabItem("Daily", nil, dailyTabFlags) then
-                    activeStatsTab = "Daily"
+                    if activeStatsTab ~= "Daily" then
+                        activeStatsTab = "Daily"
+                        save_prefs()
+                    end
                     statsTabNeedsRestore = false
                     
                     if statsCache.dailyDirty then
@@ -3756,7 +4006,10 @@ local function render_stats_window()
                 
                 local lifetimeTabFlags = (statsTabNeedsRestore and activeStatsTab == "Lifetime") and ImGuiTabItemFlags_SetSelected or 0
                 if imgui.BeginTabItem("Lifetime", nil, lifetimeTabFlags) then
-                    activeStatsTab = "Lifetime"
+                    if activeStatsTab ~= "Lifetime" then
+                        activeStatsTab = "Lifetime"
+                        save_prefs()
+                    end
                     statsTabNeedsRestore = false
                     
                     if statsCache.lifetimeDirty then
@@ -3868,7 +4121,10 @@ end
 
 local function render_settings_window()
     if showSettings then
-        PushAnglinStyle(0.95)
+        -- Uses the live Window Transparency value (like every other Anglin window)
+        -- instead of a fixed 0.95, so dragging the slider previews its effect on
+        -- the very window you're adjusting it from.
+        PushAnglinStyle()
         imgui.PushStyleVar(ImGuiStyleVar_WindowRounding, 8)
         imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 20, 20 })
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
@@ -3877,7 +4133,7 @@ local function render_settings_window()
         local settingsOpen = { showSettings }
         if imgui.Begin("Anglin Settings", settingsOpen, ImGuiWindowFlags_NoCollapse) then
             showSettings = settingsOpen[1]
-            anglin_sync_background_prim('settings', true)
+            anglin_draw_window_background()
             push_font()
             
             drawSection("Appearance")
@@ -3980,6 +4236,11 @@ local function render_settings_window()
                     end
                 end
                 imgui.PopItemWidth()
+                if primaryBuf[1] ~= "" and not parseHexColor(primaryBuf[1]) then
+                    imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                    imgui.TextWrapped("Not saved -- expected RRGGBB or RRGGBBAA")
+                    imgui.PopStyleColor()
+                end
                 imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
                 imgui.TextUnformatted("Primary Dark:")
                 imgui.PopStyleColor()
@@ -3997,6 +4258,11 @@ local function render_settings_window()
                     end
                 end
                 imgui.PopItemWidth()
+                if primaryDarkBuf[1] ~= "" and not parseHexColor(primaryDarkBuf[1]) then
+                    imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                    imgui.TextWrapped("Not saved -- expected RRGGBB or RRGGBBAA")
+                    imgui.PopStyleColor()
+                end
                 imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
                 imgui.TextUnformatted("Primary Light:")
                 imgui.PopStyleColor()
@@ -4014,6 +4280,11 @@ local function render_settings_window()
                     end
                 end
                 imgui.PopItemWidth()
+                if primaryLightBuf[1] ~= "" and not parseHexColor(primaryLightBuf[1]) then
+                    imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                    imgui.TextWrapped("Not saved -- expected RRGGBB or RRGGBBAA")
+                    imgui.PopStyleColor()
+                end
                 
                 imgui.Spacing()
                 imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
@@ -4030,6 +4301,32 @@ local function render_settings_window()
             end
             if imgui.IsItemHovered() then
                 imgui.SetTooltip("Displays a checkered backdrop image behind Anglin's windows. Blends with the Window Transparency setting above.")
+            end
+
+            imgui.Spacing()
+            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+            imgui.TextUnformatted("Fit:")
+            imgui.PopStyleColor()
+            imgui.SameLine()
+
+            local fitModeNames = { "Stretch", "Center", "Tile" }
+            local currentFitMode = anglin_get_background_fit_mode()
+            imgui.PushItemWidth(140)
+            if imgui.BeginCombo("##BackgroundFitMode", currentFitMode) then
+                for _, fitName in ipairs(fitModeNames) do
+                    local isSelected = (fitName == currentFitMode)
+                    if imgui.Selectable(fitName, isSelected) then
+                        anglin_set_background_fit_mode(fitName)
+                    end
+                    if isSelected then
+                        imgui.SetItemDefaultFocus()
+                    end
+                end
+                imgui.EndCombo()
+            end
+            imgui.PopItemWidth()
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip("Stretch fills the window edge-to-edge (may distort the image). Center shows it at its real size (shrunk to fit if needed), centered. Tile repeats it at its real size. Neither Center nor Tile will ever draw outside the window. Center/Tile only work with PNG images and fall back to Stretch otherwise.")
             end
 
             imgui.Spacing()
@@ -4255,7 +4552,7 @@ local function render_main_window()
 
     imgui.SetNextWindowSize({ 340, 0 }, ImGuiCond_Always)
     imgui.Begin("Anglin", nil, bit.bor(ImGuiWindowFlags_NoCollapse, ImGuiWindowFlags_AlwaysAutoResize))
-    anglin_sync_background_prim('hud', true)
+    anglin_draw_window_background()
 
     push_font()
     if previewMode then
@@ -4353,7 +4650,7 @@ end
 ashita.events.register('d3d_present', 'anglin_render', function()
     -- Default every background primitive to hidden; whichever windows actually draw
     -- this frame will flip their own back on further down.
-    anglin_reset_background_prims_visibility()
+    anglin_flush_background_texture_release()
 
     -- Load contest cache and run update check as soon as playerName becomes available
     if not contestCacheLoadAttempted and playerName and playerName ~= '' then
@@ -4390,6 +4687,24 @@ ashita.events.register('d3d_present', 'anglin_daily_check', function()
     if currentTime - lastDailyCheck >= 1 then
         lastDailyCheck = currentTime
         data.check_daily_reset()
+    end
+end)
+
+-- Re-syncs prefs from disk the moment the character is confirmed known --
+-- fixes the case where 'load' fired before login/character-select finished,
+-- so load_cb's own load_prefs() call ran against the wrong (generic) folder
+-- and silently kept the compiled-in defaults instead of your saved values.
+ashita.events.register('d3d_present', 'anglin_prefs_char_sync', function()
+    if not playerName or playerName == '' then
+        update_player_name()
+    end
+    if playerName and playerName ~= '' and playerName ~= lastPrefsPlayerName then
+        lastPrefsPlayerName = playerName
+        load_prefs()
+        apply_prefs()
+        -- Genuine first run for this character: no file existed even at the
+        -- correct path, so create one now that we know it's safe to.
+        ensure_prefs_file_exists()
     end
 end)
 
