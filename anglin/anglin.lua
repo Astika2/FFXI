@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.3'
+addon.version   = '4.3.1'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -208,7 +208,7 @@ local state = {
     Active = false,
     Settings = nil,
     CurrentBait = 'Unknown',
-    CurrentBaitType = 'Unknown',
+    CurrentBaitType = { consumable = false },
     CurrentRod = 'Unknown',
     Hook = nil,
     HookColor = nil,
@@ -463,6 +463,8 @@ local baitTypes = {
     ['Sliced Cod'] = { consumable = true },
     ['Sliced Sardine'] = { consumable = true },
     ['Trout Ball'] = { consumable = true },
+    ['Ball of Insect Paste'] = { consumable = true },
+    ['Super Scoop'] = { consumable = true },
     ['Fly Lure'] = { consumable = false },
     ['Frog Lure'] = { consumable = false },
     ['Lizard Lure'] = { consumable = false },
@@ -798,6 +800,12 @@ local hookMessages = {
     { message='Something caught the hook!', hook='Small Fish', color='|cFF00FF00|', logcolor=204, isItem=false },
     { message='You feel something pulling at your line.', hook='Item', color='|cFFFFFF00|', logcolor=141, isItem=true },
     { message='Something clamps onto your line ferociously!', hook='Monster', color='|cFFFF0000|', logcolor=167, isItem=false },
+    -- Sunbreeze Festival goldfish-scooping minigame: these "approaches" lines
+    -- replace the normal "Something caught the hook!" text, so they need
+    -- their own entries here to trigger the popup during the event.
+    { message='A fat, juicy goldfish approaches!', hook='Large Goldfish', color='|cFF00FF00|', logcolor=204, isItem=false },
+    { message='A tiny goldfish approaches!', hook='Tiny Goldfish', color='|cFF00FF00|', logcolor=204, isItem=false },
+    { message='A plump, black goldfish approaches!', hook='Black Goldfish', color='|cFF00FF00|', logcolor=204, isItem=false },
 }
 
 local feelMessages = {
@@ -1014,6 +1022,16 @@ local function getModernColor(originalColor)
     return originalColor
 end
 
+-- Sunbreeze Festival goldfish-scooping minigame: point values awarded per
+-- catch, shown alongside the fish name in the Daily/Lifetime stats windows.
+local sunbreezeFestivalPoints = {
+    ["Tiny Goldfish"] = 1,
+    ["Black Bubble-Eye"] = 2,
+    ["Lionhead"] = 10,
+    ["Pearlscale"] = 30,
+    ["Calico Comet"] = 30,
+}
+
 local function build_stats_cache(sourceData, cacheData)
     cacheData.totalFish = 0
     cacheData.totalItems = 0
@@ -1021,12 +1039,17 @@ local function build_stats_cache(sourceData, cacheData)
     cacheData.itemList = {}
     
     for name, count in pairs(sourceData.fishCaught) do
+        local displayName = name
+        local points = sunbreezeFestivalPoints[name]
+        if points then
+            displayName = string.format("%s (%d pts)", name, points)
+        end
         if sourceData.itemCaught and sourceData.itemCaught[name] then
             cacheData.totalItems = cacheData.totalItems + count
-            table.insert(cacheData.itemList, {name = name, count = count})
+            table.insert(cacheData.itemList, {name = displayName, count = count})
         else
             cacheData.totalFish = cacheData.totalFish + count
-            table.insert(cacheData.fishList, {name = name, count = count})
+            table.insert(cacheData.fishList, {name = displayName, count = count})
         end
     end
     
@@ -1876,7 +1899,7 @@ local function detect_bait()
     local inv = AshitaCore:GetMemoryManager():GetInventory()
     if not inv then
         state.CurrentBait = 'Unknown'
-        state.CurrentBaitType = 'unknown'
+        state.CurrentBaitType = { consumable = false }
         return
     end
 
@@ -1907,7 +1930,7 @@ local function detect_bait()
 
     if not item or item.Id == 0 then
         state.CurrentBait = 'None'
-        state.CurrentBaitType = 'none'
+        state.CurrentBaitType = { consumable = false }
         return
     end
 
@@ -1915,10 +1938,10 @@ local function detect_bait()
     if resItem and resItem.Name and resItem.Name[1] then
         local name = resItem.Name[1]
         state.CurrentBait = name
-        state.CurrentBaitType = baitTypes[name] or 'unknown'
+        state.CurrentBaitType = baitTypes[name] or { consumable = false }
     else
         state.CurrentBait = string.format('Unknown (ID %d)', item.Id)
-        state.CurrentBaitType = 'unknown'
+        state.CurrentBaitType = { consumable = false }
     end
 end
 
@@ -3451,7 +3474,11 @@ local function render_guide_window()
                     local fish = entry.fish
                     local caught = entry.caught
                     
-                    local skillStr = fish.skill > 0 and string.format(" (Skill: %d)", fish.skill) or ""
+                    -- Show the skill cap for every real Fish entry, including
+                    -- a genuine "Skill: 0" (e.g. the Sunbreeze Festival event
+                    -- fish) -- only Monster/Item entries use skill=0 as a
+                    -- "not applicable" placeholder, so those stay hidden.
+                    local skillStr = fish.type == "Fish" and string.format(" (Skill: %d)", fish.skill) or ""
                     local typeTag = fish.type == "Monster" and " [MOB]" or (fish.type == "Item" and " [ITEM]" or "")
                     local kiTag = fish.keyItem and " [KI]" or ""
                     local displayName = fish.name .. typeTag .. kiTag .. skillStr
