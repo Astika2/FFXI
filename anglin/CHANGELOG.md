@@ -1,3 +1,8 @@
+VERSION 4.3
+* Adjusted how background images work so they should display better for folks that use them.
+* Changed Anglin's character detection timing to wait for the game to load a character before trying to load settings
+* Added the fish from the Sunbreeze Festival to the guide
+
 VERSION 4.2.2
 * Guide updated to default to filter to current zone. Minor bugfix to location filtering. Reclassified Denizanasi as an ITEM.
 
