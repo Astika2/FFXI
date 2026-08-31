@@ -73,6 +73,20 @@ local function set_daily_reset_callback(callback)
 end
 
 -- ==============================
+-- Player-switch callback (to be set by main addon)
+-- Fires whenever the logged-in character changes -- covers both the first
+-- login of a session and logging out to character select and into an alt
+-- without restarting the client/addon. Lets anglin.lua invalidate its own
+-- UI caches (stats, guide) so the windows don't keep showing the previous
+-- character's numbers after the switch.
+-- ==============================
+local player_switch_callback = nil
+
+local function set_player_switch_callback(callback)
+    player_switch_callback = callback
+end
+
+-- ==============================
 -- Helper: Get current JST date correctly
 -- ==============================
 local function get_jst_date()
@@ -333,6 +347,15 @@ local function load_state()
         end
     end
 
+    -- Start from a clean slate every time this runs, not just on first call --
+    -- otherwise switching to an alt that has no daily/lifetime/personalbests
+    -- files yet would leave the *previous* character's in-memory stats in
+    -- place, and the next catch would silently start writing them into the
+    -- new character's fresh files.
+    state.daily = { date = nil, fishCaught = {}, itemCaught = {}, baitUsed = {}, baitConsumed = {}, baitLost = {}, lureLost = {}, rodBreaks = {} }
+    state.lifetime = { fishCaught = {}, itemCaught = {}, baitUsed = {}, baitConsumed = {}, baitLost = {}, lureLost = {}, rodBreaks = {} }
+    state.personalBests = {}
+
     local dailyData = load_json(dailyFile)
     if dailyData then state.daily = dailyData end
 
@@ -358,6 +381,9 @@ initialize_player_data = function()
         update_file_paths(playerName)
         -- Load data for this player
         load_state()
+        if player_switch_callback then
+            player_switch_callback()
+        end
     end
 end
 
@@ -375,7 +401,17 @@ end
 -- ==============================
 local function check_daily_reset()
     initialize_player_data()  -- Ensure we have current player data
-    
+
+    -- Player-scoped data hasn't loaded yet (e.g. this addon auto-loads before
+    -- character select finishes), so state.daily.date is still its initial nil
+    -- rather than whatever's actually saved for this character. Comparing that
+    -- against today would look like a real day change and fire a false 'Daily
+    -- stats have been reset' -- wait until the real per-character files are
+    -- known so this only ever fires for an actual JST day boundary.
+    if not dailyFile then
+        return false
+    end
+
     local today = get_jst_date()
 
     if state.daily.date ~= today then
@@ -547,6 +583,7 @@ data.record_rod_break = record_rod_break
 data.record_personal_best = record_personal_best
 data.initialize_player_data = initialize_player_data
 data.set_daily_reset_callback = set_daily_reset_callback
+data.set_player_switch_callback = set_player_switch_callback
 data.check_file_permissions = check_file_permissions
 data.get_jst_date = get_jst_date  -- Expose for debugging
 
