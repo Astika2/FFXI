@@ -1,3 +1,6 @@
+VERSION 4.3.2
+* Cleaned up some remnants from old versions in the settings.lua file. Corrected first load default of background image being enabled from true to false.
+
 VERSION 4.3.1
 * Popup will appear during Sunbreeze fishing now. And event fish pt values will show in statistics window (not totals, just what each fish is worth)
 
