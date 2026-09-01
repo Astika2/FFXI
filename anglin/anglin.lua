@@ -177,6 +177,13 @@ local AnimState = {
     buttonHover = {},
 }
 
+-- Only Font is ever read back out of state.Settings (see load_cb below) --
+-- everything else the user can change lives in anglin_prefs.lua instead,
+-- via the hand-rolled save_prefs()/load_prefs() pair, because the settings
+-- library has known issues with boolean false values and nested subtables.
+-- WindowTransparency, FontScale, ColorTheme, CustomColors, CaughtColor,
+-- UncaughtColor, and SilentToggle used to live here too (pre-migration);
+-- removed since nothing ever read them back.
 local defaults = T{
     Font = T{
         visible = true,
@@ -190,18 +197,6 @@ local defaults = T{
             color = 0x80000000,
         }
     },
-    WindowTransparency = 0.92,
-    FontScale = 1.15,
-    ColorTheme = "Soft Blue",  -- NEW
-    CustomColors = T{          -- NEW
-        Primary = "FFB974FF",
-        PrimaryDark = "D69954FF",
-        PrimaryLight = "FFD49FFF",
-    },
-    CaughtColor = "FFFFFFFF",   -- RRGGBBAA hex for guide "Caught" label (white)
-    UncaughtColor = "808080FF", -- RRGGBBAA hex for guide "Uncaught" label (gray)
-    SilentToggle = false,       -- suppress "X window toggled." chat messages
-    SkillUpSoundEnabled = true, -- play a sound when fishing skill levels up
 }
 
 local state = {
@@ -237,7 +232,7 @@ local pref_CustomColors  = { Primary = "FFB974FF", PrimaryDark = "D69954FF", Pri
 
 -- Background image (behind each Anglin window, drawn via ImGui's own draw-list
 -- image calls since ImGui itself has no notion of a window "backdrop" image).
-local pref_BackgroundImageEnabled = true
+local pref_BackgroundImageEnabled = false
 local pref_CustomBackgroundImage = "" -- filename only, resolved inside resources/; blank = use the default checker
 local pref_BackgroundFitMode = "Stretch" -- "Stretch" | "Center" | "Tile"
 local BACKGROUND_RESOURCES_DIR = string.format('%saddons/anglin/resources/', AshitaCore:GetInstallPath())
