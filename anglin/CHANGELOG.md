@@ -1,5 +1,6 @@
 VERSION 4.3.2.2
 * Scaling adjusted and able to go to 3 now for 4k screens, window size will scale with the slider as well
+* Fixed the scaling slider which has been broken since ToAU release apparently :D
 
 VERSION 4.3.2
 * Cleaned up some remnants from old versions in the settings.lua file. Corrected first load default of background image being enabled from true to false.
