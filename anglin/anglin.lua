@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.3.2'
+addon.version   = '4.3.2.2'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -247,13 +247,33 @@ CHILD_FLAG_BORDER = ImGuiChildFlags_Borders or ImGuiChildFlags_Border or 1
 CHILD_FLAG_NONE = ImGuiChildFlags_None or 0
 
 local windowPosX = 100
+-- This client's ImGui build (1.92.3) removed the old per-window
+-- SetWindowFontScale(scale) call entirely -- there is no such function on
+-- IGuiManager anymore. Font sizing now goes through PushFont(font, size)/
+-- PopFont(), where the size is an explicit target rather than a multiplier.
+-- anglinBaseFontSize is captured once, the first time push_font() runs
+-- (before any Anglin-specific scaling has been pushed), so pref_FontScale
+-- is always applied against that fixed reference point rather than
+-- whatever font size happens to be currently active.
+local anglinBaseFontSize = nil
+local anglinFontPushed = false
 local function push_font()
-    if imgui.SetWindowFontScale then
-        pcall(imgui.SetWindowFontScale, pref_FontScale)
+    anglinFontPushed = false
+    if not (imgui.PushFont and imgui.GetFont and imgui.GetFontSize) then
+        return
     end
+    if not anglinBaseFontSize then
+        anglinBaseFontSize = imgui.GetFontSize()
+    end
+    local ok = pcall(imgui.PushFont, imgui.GetFont(), anglinBaseFontSize * pref_FontScale)
+    anglinFontPushed = ok
 end
 
 local function pop_font()
+    if anglinFontPushed then
+        pcall(imgui.PopFont)
+        anglinFontPushed = false
+    end
 end
 local windowPosY = 100
 local windowPosSet = false
@@ -3043,7 +3063,7 @@ local function render_contest_window()
     imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 12, 12 })
     PushAnglinStyle()
 
-    imgui.SetNextWindowSize({ 580, 560 }, ImGuiCond_FirstUseEver)
+    imgui.SetNextWindowSize({ 580 * pref_FontScale, 560 * pref_FontScale }, ImGuiCond_FirstUseEver)
     local contestOpen = { showContest }
     if imgui.Begin("Fishing Contest##anglin_contest", contestOpen) then
         showContest = contestOpen[1]
@@ -3381,7 +3401,7 @@ local function render_guide_window()
         imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 16, 16 })
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
         
-        imgui.SetNextWindowSize({ 800, 700 }, ImGuiCond_FirstUseEver)
+        imgui.SetNextWindowSize({ 800 * pref_FontScale, 700 * pref_FontScale }, ImGuiCond_FirstUseEver)
         local guideOpen = { showGuide }
         if imgui.Begin("Fishing Guide", guideOpen, ImGuiWindowFlags_NoCollapse) then
             showGuide = guideOpen[1]
@@ -3891,7 +3911,7 @@ local function render_stats_window()
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
         imgui.PushStyleVar(ImGuiStyleVar_TabRounding, 4)
         
-        imgui.SetNextWindowSize({ 550, 600 }, ImGuiCond_FirstUseEver)
+        imgui.SetNextWindowSize({ 550 * pref_FontScale, 600 * pref_FontScale }, ImGuiCond_FirstUseEver)
         local statsOpen = { showStats }
         if imgui.Begin("Fishing Statistics", statsOpen, ImGuiWindowFlags_NoCollapse) then
             showStats = statsOpen[1]
@@ -4151,7 +4171,7 @@ local function render_settings_window()
         imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 20, 20 })
         imgui.PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1)
         
-        imgui.SetNextWindowSize({ 500, 450 }, ImGuiCond_FirstUseEver)
+        imgui.SetNextWindowSize({ 500 * pref_FontScale, 450 * pref_FontScale }, ImGuiCond_FirstUseEver)
         local settingsOpen = { showSettings }
         if imgui.Begin("Anglin Settings", settingsOpen, ImGuiWindowFlags_NoCollapse) then
             showSettings = settingsOpen[1]
@@ -4190,7 +4210,7 @@ local function render_settings_window()
             imgui.PushStyleColor(ImGuiCol_SliderGrabActive, Colors.PrimaryDark)
             imgui.PushStyleVar(ImGuiStyleVar_GrabRounding, 4)
             
-            if imgui.SliderFloat("##fontscale", fontScale, 0.8, 2.0, "%.2f") then
+            if imgui.SliderFloat("##fontscale", fontScale, 0.8, 3.0, "%.2f") then
                 pref_FontScale = fontScale[1]
                 save_prefs()
             end
@@ -4572,7 +4592,12 @@ local function render_main_window()
         windowPosSet = true
     end
 
-    imgui.SetNextWindowSize({ 340, 0 }, ImGuiCond_Always)
+    -- Width is pinned every frame (ImGuiCond_Always) rather than left to
+    -- AlwaysAutoResize, so the fishing popup has a stable, predictable width
+    -- instead of jittering as fish/bait names of different lengths come and
+    -- go. Scaled by pref_FontScale so it grows with the UI Font Scale slider
+    -- instead of clipping larger text; height stays 0 (auto) either way.
+    imgui.SetNextWindowSize({ 340 * pref_FontScale, 0 }, ImGuiCond_Always)
     imgui.Begin("Anglin", nil, bit.bor(ImGuiWindowFlags_NoCollapse, ImGuiWindowFlags_AlwaysAutoResize))
     anglin_draw_window_background()
 
