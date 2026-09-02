@@ -1,4 +1,4 @@
-VERSION 4.3.2
+VERSION 4.3.2.2
 * Scaling adjusted and able to go to 3 now for 4k screens, window size will scale with the slider as well
 
 VERSION 4.3.2
