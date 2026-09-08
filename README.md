@@ -1,7 +1,7 @@
 Anglin Addon for HorizonXI (FFXI)
 
 This addon is meant to help out with fishing in FFXI. This was inspired by Thorny's Fishaid addon and is provided at no cost. Please enjoy!
-Please also enable ImGuiStyle in the HorizonXI launcher, otherwise this will not look right!!!<br><br>
+
 Available commands:<br>
 /anglin guide - this will open/close the fish guide (or switch to it from the skillup tab) with info on where to find fish and how to catch<br>
 /anglin suggest - this will open/close the skillup suggestions (or switch to it from the guide tab) with suggestions on which fish you could skill on at your current fishing skill.<br>
