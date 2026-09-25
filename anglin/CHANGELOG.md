@@ -1,3 +1,6 @@
+VERSION 4.4
+* Added Rod Breaking tab which will show what fish/items have a chance at breaking your shit.
+
 VERSION 4.3.2.2
 * Scaling adjusted and able to go to 3 now for 4k screens, window size will scale with the slider as well
 * Fixed the scaling slider which has been broken since ToAU release apparently :D
