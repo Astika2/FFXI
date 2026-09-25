@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.3.2.2'
+addon.version   = '4.4'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -406,10 +406,9 @@ local function format_duration(secs)
 end
 local activeStatsTab = "Daily"
 local activeGuideTab = "Guide"
-local guideTabBarId = 0  -- increment to force ImGui to forget tab state
 
 local statsTabNeedsRestore = false
-local guideTabNeedsRestore = false  -- unused; kept to avoid errors if prefs reference it
+local guideTabNeedsRestore = false  -- set true whenever guide/rods/suggest opens the window, so the target tab force-selects itself without moving tab order
 local statsCache = {
     dailyDirty = true,
     lifetimeDirty = true,
@@ -810,6 +809,316 @@ local fishingGuide = {
 	{ name = "Zazalda Clot", skill = 0, location = "Mount Zhayolm", bait = "Any", rod = "Any", type = "Monster" },
 	{ name = "Zazalda Jagil", skill = 0, location = "Mount Zhayolm", bait = "Any", rod = "Any", type = "Monster" },
 }
+-- Rod break / line snap source data: ranking, size class, and legendary flag
+-- for every Fish/Item catch, pulled from LandSandBoat's fishing_fish.sql (see the
+-- standalone "Rod Breaking Odds" tool). Cross-referenced against fishingGuide below
+-- so only entries actually obtainable in this server's guide show up in the tab.
+local RODBREAK_SOURCE = {
+    { name = "Bastore Sweeper", skillLevel = 12, ranking = 99, sizeType = 0, legendary = false },
+    { name = "Brass Loach", skillLevel = 42, ranking = 99, sizeType = 0, legendary = false },
+    { name = "Ca Cuong", skillLevel = 78, ranking = 99, sizeType = 0, legendary = false },
+    { name = "Garpike", skillLevel = 83, ranking = 99, sizeType = 0, legendary = false },
+    { name = "Gigant Octopus", skillLevel = 80, ranking = 99, sizeType = 1, legendary = false },
+    { name = "Matsya", skillLevel = 150, ranking = 99, sizeType = 1, legendary = true },
+    { name = "Megalodon", skillLevel = 87, ranking = 99, sizeType = 1, legendary = false },
+    { name = "Pirarucu", skillLevel = 89, ranking = 99, sizeType = 1, legendary = false },
+    { name = "Trumpet Shell", skillLevel = 63, ranking = 99, sizeType = 0, legendary = false },
+    { name = "Abaia", skillLevel = 150, ranking = 34, sizeType = 1, legendary = true },
+    { name = "Ryugu Titan", skillLevel = 150, ranking = 34, sizeType = 1, legendary = true },
+    { name = "Gugrusaurus", skillLevel = 140, ranking = 33, sizeType = 1, legendary = true },
+    { name = "Lik", skillLevel = 140, ranking = 33, sizeType = 1, legendary = true },
+    { name = "Cave Cherax", skillLevel = 130, ranking = 32, sizeType = 1, legendary = true },
+    { name = "Tricorn", skillLevel = 128, ranking = 31, sizeType = 1, legendary = true },
+    { name = "Gerrothorax", skillLevel = 134, ranking = 30, sizeType = 1, legendary = true },
+    { name = "Mola Mola", skillLevel = 135, ranking = 30, sizeType = 1, legendary = true },
+    { name = "Titanic Sawfish", skillLevel = 125, ranking = 29, sizeType = 1, legendary = true },
+    { name = "Sea Zombie", skillLevel = 100, ranking = 28, sizeType = 1, legendary = true },
+    { name = "Takitaro", skillLevel = 101, ranking = 28, sizeType = 1, legendary = true },
+    { name = "Titanictus", skillLevel = 101, ranking = 28, sizeType = 1, legendary = true },
+    { name = "Giant Chirai", skillLevel = 110, ranking = 27, sizeType = 1, legendary = true },
+    { name = "Kalkanbaligi", skillLevel = 105, ranking = 27, sizeType = 1, legendary = true },
+    { name = "Ahtapot", skillLevel = 90, ranking = 25, sizeType = 1, legendary = false },
+    { name = "Grimmonite", skillLevel = 90, ranking = 25, sizeType = 1, legendary = false },
+    { name = "Three-Eyed Fish", skillLevel = 79, ranking = 25, sizeType = 1, legendary = false },
+    { name = "Veydal Wrasse", skillLevel = 35, ranking = 25, sizeType = 1, legendary = false },
+    { name = "Pterygotus", skillLevel = 99, ranking = 24, sizeType = 1, legendary = false },
+    { name = "Turnabaligi", skillLevel = 104, ranking = 24, sizeType = 1, legendary = false },
+    { name = "Bhefhel Marlin", skillLevel = 61, ranking = 23, sizeType = 1, legendary = false },
+    { name = "Black Sole", skillLevel = 96, ranking = 23, sizeType = 0, legendary = false },
+    { name = "Bladefish", skillLevel = 71, ranking = 23, sizeType = 1, legendary = false },
+    { name = "Dil", skillLevel = 96, ranking = 23, sizeType = 0, legendary = false },
+    { name = "Emperor Fish", skillLevel = 91, ranking = 23, sizeType = 1, legendary = false },
+    { name = "Gavial Fish", skillLevel = 81, ranking = 23, sizeType = 1, legendary = false },
+    { name = "Giant Donko", skillLevel = 50, ranking = 23, sizeType = 1, legendary = false },
+    { name = "Gigant Squid", skillLevel = 91, ranking = 23, sizeType = 1, legendary = false },
+    { name = "Jungle Catfish", skillLevel = 80, ranking = 23, sizeType = 1, legendary = false },
+    { name = "Kilicbaligi", skillLevel = 62, ranking = 23, sizeType = 1, legendary = false },
+    { name = "Morinabaligi", skillLevel = 94, ranking = 23, sizeType = 0, legendary = false },
+    { name = "Rhinochimera", skillLevel = 72, ranking = 23, sizeType = 1, legendary = false },
+    { name = "Zebra Eel", skillLevel = 71, ranking = 23, sizeType = 0, legendary = false },
+    { name = "Bastore Bream", skillLevel = 86, ranking = 22, sizeType = 0, legendary = false },
+    { name = "Gugru Tuna", skillLevel = 41, ranking = 22, sizeType = 1, legendary = false },
+    { name = "Lakerda", skillLevel = 41, ranking = 22, sizeType = 1, legendary = false },
+    { name = "Mercanbaligi", skillLevel = 86, ranking = 22, sizeType = 0, legendary = false },
+    { name = "Armored Pisces", skillLevel = 108, ranking = 19, sizeType = 1, legendary = false },
+    { name = "Coral Butterfly", skillLevel = 40, ranking = 19, sizeType = 0, legendary = false },
+    { name = "Elshimo Newt", skillLevel = 60, ranking = 19, sizeType = 0, legendary = false },
+    { name = "Giant Catfish", skillLevel = 31, ranking = 19, sizeType = 1, legendary = false },
+    { name = "Yayinbaligi", skillLevel = 31, ranking = 19, sizeType = 1, legendary = false },
+    { name = "Arrowwood Log", skillLevel = 4, ranking = 18, sizeType = 1, legendary = false },
+    { name = "Black Ghost", skillLevel = 88, ranking = 18, sizeType = 0, legendary = false },
+    { name = "Blindfish", skillLevel = 28, ranking = 18, sizeType = 0, legendary = false },
+    { name = "Monke-Onke", skillLevel = 51, ranking = 18, sizeType = 1, legendary = false },
+    { name = "Rusty Leggings", skillLevel = 7, ranking = 18, sizeType = 0, legendary = false },
+    { name = "Cheval Salmon", skillLevel = 21, ranking = 17, sizeType = 0, legendary = false },
+    { name = "Crystal Bass", skillLevel = 35, ranking = 17, sizeType = 0, legendary = false },
+    { name = "Istavrit", skillLevel = 37, ranking = 16, sizeType = 1, legendary = false },
+    { name = "Alabaligi", skillLevel = 37, ranking = 15, sizeType = 0, legendary = false },
+    { name = "Black Eel", skillLevel = 47, ranking = 15, sizeType = 0, legendary = false },
+    { name = "Shining Trout", skillLevel = 37, ranking = 15, sizeType = 0, legendary = false },
+    { name = "Yilanbaligi", skillLevel = 47, ranking = 15, sizeType = 0, legendary = false },
+    { name = "Zafmlug Bass", skillLevel = 43, ranking = 15, sizeType = 0, legendary = false },
+    { name = "Bluetail", skillLevel = 55, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Cobalt Jellyfish", skillLevel = 5, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Denizanasi", skillLevel = 5, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Forest Carp", skillLevel = 20, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Gold Carp", skillLevel = 56, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Gold Lobster", skillLevel = 46, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Icefish", skillLevel = 49, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Istakoz", skillLevel = 46, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Istiridye", skillLevel = 53, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Norg Shell", skillLevel = 14, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Ogre Eel", skillLevel = 35, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Sazanbaligi", skillLevel = 56, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Shall Shell", skillLevel = 53, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Silver Shark", skillLevel = 76, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Trilobite", skillLevel = 59, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Uskumru", skillLevel = 55, ranking = 14, sizeType = 0, legendary = false },
+    { name = "Crescent Fish", skillLevel = 69, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Dark Bass", skillLevel = 33, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Fish Scale Shield", skillLevel = 7, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Noble Lady", skillLevel = 66, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Pamtam Kelp", skillLevel = 3, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Sandfish", skillLevel = 50, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Tricolored Carp", skillLevel = 27, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Vongola Clam", skillLevel = 53, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Adoulinian Kelp", skillLevel = 6, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Ripped cap", skillLevel = 20, ranking = 13, sizeType = 0, legendary = false },
+    { name = "Fat Greedie", skillLevel = 24, ranking = 11, sizeType = 0, legendary = false },
+    { name = "Kaplumbaga", skillLevel = 53, ranking = 11, sizeType = 0, legendary = false },
+    { name = "Red Terrapin", skillLevel = 53, ranking = 11, sizeType = 0, legendary = false },
+    { name = "Bastore Sardine", skillLevel = 9, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Betta", skillLevel = 68, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Cone Calamary", skillLevel = 48, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Greedie", skillLevel = 14, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Hamsi", skillLevel = 9, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Kalamar", skillLevel = 48, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Kayabaligi", skillLevel = 75, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Lungfish", skillLevel = 32, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Mythril Sword", skillLevel = 90, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Nebimonite", skillLevel = 27, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Nosteau Herring", skillLevel = 39, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Pipira", skillLevel = 29, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Rusty Bucket", skillLevel = 1, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Tavnazian Goby", skillLevel = 75, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Tiger Cod", skillLevel = 29, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Yellow Globe", skillLevel = 17, ranking = 10, sizeType = 0, legendary = false },
+    { name = "Copper Frog", skillLevel = 16, ranking = 9, sizeType = 0, legendary = false },
+    { name = "Moorish Idol", skillLevel = 26, ranking = 9, sizeType = 0, legendary = false },
+    { name = "Crayfish", skillLevel = 7, ranking = 8, sizeType = 0, legendary = false },
+    { name = "Moat Carp", skillLevel = 11, ranking = 7, sizeType = 0, legendary = false },
+    { name = "Caedarva Frog", skillLevel = 30, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Copper ring", skillLevel = 24, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Coral Fragment", skillLevel = 74, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Elshimo Frog", skillLevel = 30, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Gurnard", skillLevel = 26, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Moblin Mask", skillLevel = 54, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Mythril Dagger", skillLevel = 90, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Quus", skillLevel = 19, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Rusty Cap", skillLevel = 30, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Rusty Greatsword", skillLevel = 60, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Rusty Pick", skillLevel = 40, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Rusty Subligar", skillLevel = 5, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Silver Ring", skillLevel = 34, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Tiny Goldfish", skillLevel = 20, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Bugbear Mask", skillLevel = 54, ranking = 5, sizeType = 0, legendary = false },
+    { name = "Bibiki Urchin", skillLevel = 3, ranking = 1, sizeType = 0, legendary = false },
+    { name = "Bibikibo", skillLevel = 8, ranking = 1, sizeType = 0, legendary = false },
+    { name = "Damp Scroll", skillLevel = 20, ranking = 1, sizeType = 0, legendary = false },
+    { name = "Hydrogauge", skillLevel = 7, ranking = 1, sizeType = 0, legendary = false },
+    { name = "Lamp Marimo", skillLevel = 3, ranking = 1, sizeType = 0, legendary = false },
+    { name = "Muddy Siredon", skillLevel = 18, ranking = 1, sizeType = 0, legendary = false },
+    { name = "Phanauet Newt", skillLevel = 4, ranking = 1, sizeType = 0, legendary = false },
+    { name = "Gil", skillLevel = 1, ranking = 1, sizeType = 0, legendary = false },
+    { name = "Tarutaru Snare", skillLevel = 30, ranking = 1, sizeType = 0, legendary = false },
+    { name = "Mithra Snare", skillLevel = 30, ranking = 1, sizeType = 0, legendary = false },
+}
+
+-- The rod roster this server actually uses (Maze Monger Fishing Rod, Lu Shang's
+-- Fishing Rod +1, Ebisu Fishing Rod +1, and Judge's Rod are excluded -- not
+-- obtainable on this version of the game).
+RODBREAK_RODS = {
+    { name = "Goldfish Basket", sizeType = 0, maxRank = 5, breakable = false, legendary = false },
+    { name = "Willow Fishing Rod", sizeType = 0, maxRank = 5, breakable = true, legendary = false },
+    { name = "Yew Fishing Rod", sizeType = 0, maxRank = 6, breakable = true, legendary = false },
+    { name = "Bamboo Fishing Rod", sizeType = 0, maxRank = 8, breakable = true, legendary = false },
+    { name = "Fastwater Fishing Rod", sizeType = 0, maxRank = 7, breakable = true, legendary = false },
+    { name = "Tarutaru Fishing Rod", sizeType = 0, maxRank = 9, breakable = true, legendary = false },
+    { name = "Hume Fishing Rod", sizeType = 0, maxRank = 10, breakable = true, legendary = false },
+    { name = "Carbon Fishing Rod", sizeType = 0, maxRank = 13, breakable = true, legendary = false },
+    { name = "Glass Fiber Fishing Rod", sizeType = 0, maxRank = 12, breakable = true, legendary = false },
+    { name = "Halcyon Rod", sizeType = 0, maxRank = 18, breakable = true, legendary = false },
+    { name = "Clothespole", sizeType = 1, maxRank = 16, breakable = true, legendary = false },
+    { name = "Single Hook Fishing Rod", sizeType = 1, maxRank = 22, breakable = true, legendary = false },
+    { name = "Mithran Fishing Rod", sizeType = 1, maxRank = 18, breakable = true, legendary = false },
+    { name = "Composite Fishing Rod", sizeType = 1, maxRank = 24, breakable = true, legendary = false },
+    { name = "Lu Shang's Fishing Rod", sizeType = 0, maxRank = 28, breakable = true, legendary = true },
+    { name = "Ebisu Fishing Rod", sizeType = 0, maxRank = 30, breakable = false, legendary = true },
+}
+local RODBREAK_LARGE_SIZE = 1
+
+-- Entries actually shown in the tab: every fishingGuide Fish/Item entry that also
+-- has LandSandBoat breaking data, with the guide's own location/bait/notes/key item
+-- carried over so tooltips match the rest of the guide. Built once at load time --
+-- fishingGuide is static data, so there's nothing to invalidate later.
+RODBREAK_ENTRIES = {}
+do
+    local bySourceName = {}
+    for _, s in ipairs(RODBREAK_SOURCE) do
+        bySourceName[s.name] = s
+    end
+    for _, fish in ipairs(fishingGuide) do
+        if fish.type == "Fish" or fish.type == "Item" then
+            local src = bySourceName[fish.name]
+            if src then
+                table.insert(RODBREAK_ENTRIES, {
+                    name = fish.name,
+                    type = fish.type,
+                    skillLevel = src.skillLevel,
+                    ranking = src.ranking,
+                    sizeType = src.sizeType,
+                    legendary = src.legendary,
+                    location = fish.location,
+                    bait = fish.bait,
+                    recRod = fish.rod,
+                    notes = fish.notes,
+                    keyItem = fish.keyItem,
+                })
+            end
+        end
+    end
+    table.sort(RODBREAK_ENTRIES, function(a, b) return a.name < b.name end)
+end
+
+-- Rod break / line snap chance, ported 1:1 from the LandSandBoat server's own
+-- CalculateBreakChance / CalculateSnapChance (src/map/utils/fishingutils.cpp).
+-- `effectiveSkill` is the player's Fishing skill including gear/buff bonuses.
+function anglin_rodbreak_break_chance(effectiveSkill, entry, rod)
+    if not rod.breakable then return 0 end
+    local levelDiffBonus = (effectiveSkill + 10 > entry.skillLevel) and 2 or 0
+    local legendaryBonus, sizePenalty = 0, 0
+    if not rod.legendary and entry.sizeType > rod.sizeType then
+        sizePenalty = 2
+    elseif rod.legendary and entry.sizeType == RODBREAK_LARGE_SIZE then
+        legendaryBonus = 1
+    end
+    if not rod.legendary and entry.legendary then
+        sizePenalty = 5
+    end
+    local effMax = rod.maxRank + levelDiffBonus + legendaryBonus
+    if entry.ranking > effMax then
+        local diff = entry.ranking - effMax
+        return math.max(0, math.min(55, math.floor((diff + sizePenalty) * 1.3)))
+    end
+    return 0
+end
+
+function anglin_rodbreak_snap_chance(effectiveSkill, entry, rod)
+    local levelDiffBonus = (effectiveSkill + 10 > entry.skillLevel) and 2 or 0
+    local legendaryBonus, sizePenalty = 0, 0
+    if not rod.legendary and entry.sizeType > rod.sizeType then
+        sizePenalty = 2
+    end
+    if entry.legendary then
+        if not rod.legendary then
+            sizePenalty = sizePenalty + 3
+        else
+            legendaryBonus = 1
+        end
+    end
+    local totalDurability = rod.maxRank + levelDiffBonus + legendaryBonus - sizePenalty
+    if entry.ranking > totalDurability then
+        local diff = entry.ranking - totalDurability
+        return math.max(0, math.min(55, math.floor(diff * 8.5)))
+    end
+    return 0
+end
+
+-- 0% = Safe, 1-29% = Risky, 30-44% = Dangerous, 45-55% = Severe.
+function anglin_rodbreak_bucket(pct)
+    if pct <= 0 then return "Safe"
+    elseif pct < 30 then return "Risky"
+    elseif pct < 45 then return "Dangerous"
+    else return "Severe" end
+end
+
+function anglin_rodbreak_bucket_color(bucket)
+    if bucket == "Safe" then return Colors.Success
+    elseif bucket == "Risky" then return Colors.Warning
+    elseif bucket == "Dangerous" then return 0xFF2E7BFF
+    else return 0xFF2E2EE6 end
+end
+
+-- Mutable filter/UI state for the Rod Breaking tab. Kept as plain globals (not
+-- `local`) so referencing them from inside render_guide_window's nested tab
+-- functions never counts against LuaJIT's 60-upvalue-per-closure ceiling --
+-- the same trick already used for anglin_get_fishing_skill_bonus() etc. above.
+RodBreakFilters = {
+    catchType = "All",      -- "All" | "Fish" | "Item"
+    rod = "All",            -- "All" | one of RODBREAK_RODS[].name
+    breakCategory = "All",  -- "All" | "Safe" | "Risky" | "Dangerous" | "Severe"
+    snapCategory = "All",
+    sortBy = "Name",        -- "Name" | "Skill Req." | "Ranking" | "Rod Break %" | "Line Snap %"
+    sortDir = "Ascending",  -- "Ascending" | "Descending"
+}
+RodBreakNeedsRodDetect = true -- set true whenever the tab is opened, so it can default to your equipped rod
+
+RODBREAK_ROD_OPTIONS = { "All" }
+for _, r in ipairs(RODBREAK_RODS) do
+    table.insert(RODBREAK_ROD_OPTIONS, r.name)
+end
+RODBREAK_TYPE_OPTIONS = { "All", "Fish", "Item" }
+RODBREAK_CATEGORY_OPTIONS = { "All", "Safe", "Risky", "Dangerous", "Severe" }
+RODBREAK_SORT_OPTIONS = { "Name", "Skill Req.", "Ranking", "Rod Break %", "Line Snap %" }
+RODBREAK_SORT_DIR_OPTIONS = { "Ascending", "Descending" }
+
+-- Looks up state.CurrentRod (the equipped rod name detect_rod() maintains) against
+-- RODBREAK_RODS and defaults the filter to it; falls back to "All" (best/worst
+-- case across every rod) when nothing's equipped or it's not a recognized rod.
+function anglin_rodbreak_detect_default_rod()
+    local equipped = state and state.CurrentRod
+    if equipped and equipped ~= "None" and equipped ~= "Unknown" then
+        for _, r in ipairs(RODBREAK_RODS) do
+            if r.name == equipped then
+                RodBreakFilters.rod = equipped
+                return
+            end
+        end
+    end
+    RodBreakFilters.rod = "All"
+end
+
+function anglin_rodbreak_reset_filters()
+    RodBreakFilters.catchType = "All"
+    RodBreakFilters.breakCategory = "All"
+    RodBreakFilters.snapCategory = "All"
+    RodBreakFilters.sortBy = "Name"
+    RodBreakFilters.sortDir = "Ascending"
+    anglin_rodbreak_detect_default_rod()
+end
+
+
+
 local hookMessages = {
     { message='Something caught the hook!!!', hook='Large Fish', color='|cFF00FF00|', logcolor=204, isItem=false },
     { message='Something caught the hook!', hook='Small Fish', color='|cFF00FF00|', logcolor=204, isItem=false },
@@ -3306,7 +3615,7 @@ ashita.events.register('command', 'anglin_command', function(e)
     e.blocked = true
 
     if (#args == 1) then
-        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin suggest | /anglin contest | /anglin update | /anglin changelog [version] | /anglin logkeyitems')
+        AshitaCore:GetChatManager():QueueCommand(1, '/echo Usage: /anglin stats | /anglin settings | /anglin guide | /anglin rods | /anglin suggest | /anglin contest | /anglin update | /anglin changelog [version] | /anglin logkeyitems')
         return
     end
 
@@ -3330,22 +3639,45 @@ ashita.events.register('command', 'anglin_command', function(e)
             showGuide = false
         else
             activeGuideTab = "Guide"
-            guideTabBarId = guideTabBarId + 1
+            guideTabNeedsRestore = true
             showGuide = true
             guideNeedsZoneFilter = true
+            -- Refresh state.CurrentRod (normally only updated on a fish bite --
+            -- see detect_rod()'s other call site in the text_in handler) so
+            -- the Rod Breaking tab defaults correctly no matter which tab
+            -- command the window was opened from.
+            detect_rod()
+            RodBreakNeedsRodDetect = true
         end
         if not pref_SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
         end
+
+    elseif subcmd == 'rods' then
+        if showGuide and activeGuideTab == "RodBreak" then
+            showGuide = false
+        else
+            activeGuideTab = "RodBreak"
+            guideTabNeedsRestore = true
+            showGuide = true
+            detect_rod()
+            RodBreakNeedsRodDetect = true
+        end
+        if not pref_SilentToggle then
+            AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
+        end
+
 
     elseif subcmd == 'suggest' then
         if showGuide and activeGuideTab == "Skillups" then
             showGuide = false
         else
             activeGuideTab = "Skillups"
-            guideTabBarId = guideTabBarId + 1  -- new ID = fresh tab state
+            guideTabNeedsRestore = true
             showGuide = true
             guideNeedsZoneFilter = true
+            detect_rod()
+            RodBreakNeedsRodDetect = true
         end
         if not pref_SilentToggle then
             AshitaCore:GetChatManager():QueueCommand(1, '/echo Fishing guide window toggled.')
@@ -3408,13 +3740,13 @@ local function render_guide_window()
             anglin_draw_window_background()
             push_font()
 
-            if imgui.BeginTabBar("GuideTabBar" .. guideTabBarId) then
+            if imgui.BeginTabBar("GuideTabBar") then
 
-                -- Render the saved active tab first; ImGui always selects
-                -- the first tab it sees when the window initializes.
                 local function render_guide_tab()
-                    if imgui.BeginTabItem("Guide") then
-                        activeGuideTab = "Guide"
+                    local guideTabFlags = (guideTabNeedsRestore and activeGuideTab == "Guide") and ImGuiTabItemFlags_SetSelected or 0
+                    if imgui.BeginTabItem("Guide", nil, guideTabFlags) then
+                        if activeGuideTab ~= "Guide" then activeGuideTab = "Guide" end
+                        guideTabNeedsRestore = false
             
             drawSection("Filters")
             
@@ -3620,8 +3952,10 @@ local function render_guide_window()
                     end
                 end
                 local function render_skillups_tab()
-                    if imgui.BeginTabItem("Skillups") then
-                        activeGuideTab = "Skillups"
+                    local skillupsTabFlags = (guideTabNeedsRestore and activeGuideTab == "Skillups") and ImGuiTabItemFlags_SetSelected or 0
+                    if imgui.BeginTabItem("Skillups", nil, skillupsTabFlags) then
+                        if activeGuideTab ~= "Skillups" then activeGuideTab = "Skillups" end
+                        guideTabNeedsRestore = false
                     local playerSkill = get_fishing_skill()
 
                     if not playerSkill then
@@ -3780,8 +4114,10 @@ local function render_guide_window()
                 end
 
                 local function render_isolating_tab()
-                    if imgui.BeginTabItem("Isolating Baits") then
-                        activeGuideTab = "Isolating"
+                    local isolatingTabFlags = (guideTabNeedsRestore and activeGuideTab == "Isolating") and ImGuiTabItemFlags_SetSelected or 0
+                    if imgui.BeginTabItem("Isolating Baits", nil, isolatingTabFlags) then
+                        if activeGuideTab ~= "Isolating" then activeGuideTab = "Isolating" end
+                        guideTabNeedsRestore = false
 
                         drawSection("Filters")
 
@@ -3870,19 +4206,288 @@ local function render_guide_window()
                     end
                 end
 
-                if activeGuideTab == "Skillups" then
-                    render_skillups_tab()
-                    render_guide_tab()
-                    render_isolating_tab()
-                elseif activeGuideTab == "Isolating" then
-                    render_isolating_tab()
-                    render_guide_tab()
-                    render_skillups_tab()
-                else
-                    render_guide_tab()
-                    render_skillups_tab()
-                    render_isolating_tab()
+                local function render_rodbreak_tab()
+                    local rodbreakTabFlags = (guideTabNeedsRestore and activeGuideTab == "RodBreak") and ImGuiTabItemFlags_SetSelected or 0
+                    if imgui.BeginTabItem("Rod Breaking", nil, rodbreakTabFlags) then
+                        if activeGuideTab ~= "RodBreak" then activeGuideTab = "RodBreak" end
+                        guideTabNeedsRestore = false
+
+                        if RodBreakNeedsRodDetect then
+                            RodBreakNeedsRodDetect = false
+                            anglin_rodbreak_detect_default_rod()
+                        end
+
+                        drawSection("Filters")
+
+                        imgui.TextUnformatted("Rod:")
+                        imgui.SameLine()
+                        imgui.PushItemWidth(220)
+                        render_combo("##RodBreakRodFilter", RODBREAK_ROD_OPTIONS, RodBreakFilters.rod, function(selected)
+                            RodBreakFilters.rod = selected
+                        end)
+                        imgui.PopItemWidth()
+
+                        imgui.SameLine()
+                        imgui.Dummy({20, 0})
+                        imgui.SameLine()
+
+                        imgui.TextUnformatted("Type:")
+                        imgui.SameLine()
+                        imgui.PushItemWidth(120)
+                        render_combo("##RodBreakTypeFilter", RODBREAK_TYPE_OPTIONS, RodBreakFilters.catchType, function(selected)
+                            RodBreakFilters.catchType = selected
+                        end)
+                        imgui.PopItemWidth()
+
+                        imgui.TextUnformatted("Rod Break:")
+                        imgui.SameLine()
+                        imgui.PushItemWidth(150)
+                        render_combo("##RodBreakCategoryFilter", RODBREAK_CATEGORY_OPTIONS, RodBreakFilters.breakCategory, function(selected)
+                            RodBreakFilters.breakCategory = selected
+                        end)
+                        imgui.PopItemWidth()
+
+                        imgui.SameLine()
+                        imgui.Dummy({20, 0})
+                        imgui.SameLine()
+
+                        imgui.TextUnformatted("Line Snap:")
+                        imgui.SameLine()
+                        imgui.PushItemWidth(150)
+                        render_combo("##RodBreakSnapFilter", RODBREAK_CATEGORY_OPTIONS, RodBreakFilters.snapCategory, function(selected)
+                            RodBreakFilters.snapCategory = selected
+                        end)
+                        imgui.PopItemWidth()
+
+                        imgui.TextUnformatted("Sort by:")
+                        imgui.SameLine()
+                        imgui.PushItemWidth(150)
+                        render_combo("##RodBreakSortBy", RODBREAK_SORT_OPTIONS, RodBreakFilters.sortBy, function(selected)
+                            RodBreakFilters.sortBy = selected
+                        end)
+                        imgui.PopItemWidth()
+
+                        imgui.SameLine()
+                        imgui.Dummy({20, 0})
+                        imgui.SameLine()
+
+                        imgui.TextUnformatted("Order:")
+                        imgui.SameLine()
+                        imgui.PushItemWidth(130)
+                        render_combo("##RodBreakSortDir", RODBREAK_SORT_DIR_OPTIONS, RodBreakFilters.sortDir, function(selected)
+                            RodBreakFilters.sortDir = selected
+                        end)
+                        imgui.PopItemWidth()
+
+                        if modernButton("Reset Filters", 120, 25) then
+                            anglin_rodbreak_reset_filters()
+                        end
+
+                        imgui.Spacing()
+                        imgui.TextUnformatted("Legend:")
+                        imgui.SameLine()
+                        imgui.PushStyleColor(ImGuiCol_Text, anglin_rodbreak_bucket_color("Safe"))
+                        imgui.TextUnformatted("Safe")
+                        imgui.PopStyleColor()
+                        imgui.SameLine()
+                        imgui.PushStyleColor(ImGuiCol_Text, anglin_rodbreak_bucket_color("Risky"))
+                        imgui.TextUnformatted("Risky (1-29%)")
+                        imgui.PopStyleColor()
+                        imgui.SameLine()
+                        imgui.PushStyleColor(ImGuiCol_Text, anglin_rodbreak_bucket_color("Dangerous"))
+                        imgui.TextUnformatted("Dangerous (30-44%)")
+                        imgui.PopStyleColor()
+                        imgui.SameLine()
+                        imgui.PushStyleColor(ImGuiCol_Text, anglin_rodbreak_bucket_color("Severe"))
+                        imgui.TextUnformatted("Severe (45-55%)")
+                        imgui.PopStyleColor()
+
+                        drawSection()
+
+                        local playerSkill = get_fishing_skill()
+                        if not playerSkill then
+                            imgui.TextColored({1,0.4,0.4,1}, "Skill data unavailable.")
+                        else
+                            local skillBonus = anglin_get_fishing_skill_bonus() or 0
+                            local effectiveSkill = playerSkill + skillBonus
+
+                            imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
+                            imgui.TextUnformatted(string.format("Your Fishing Skill: %s", anglin_format_skill_with_bonus(playerSkill)))
+                            imgui.PopStyleColor()
+
+                            local selectedRod = nil
+                            if RodBreakFilters.rod ~= "All" then
+                                for _, r in ipairs(RODBREAK_RODS) do
+                                    if r.name == RodBreakFilters.rod then
+                                        selectedRod = r
+                                        break
+                                    end
+                                end
+                            end
+
+                            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                            if selectedRod then
+                                imgui.TextWrapped(string.format(
+                                    "%s -- Size class: %s | Max rank: %d | Legendary: %s | Breakable: %s",
+                                    RodBreakFilters.rod,
+                                    (selectedRod.sizeType == 1) and "Large" or "Small",
+                                    selectedRod.maxRank,
+                                    selectedRod.legendary and "Yes" or "No",
+                                    selectedRod.breakable and "Yes" or "No (cannot break)"))
+                            else
+                                imgui.TextWrapped(string.format(
+                                    "Showing the best- and worst-case chance across all %d known rods -- pick one above to see exact numbers for your rod.",
+                                    #RODBREAK_RODS))
+                            end
+                            imgui.PopStyleColor()
+
+                            imgui.Spacing()
+
+                            local function passes_category(pctMin, pctMax, filterVal)
+                                if filterVal == "All" then return true end
+                                if anglin_rodbreak_bucket(pctMax) == filterVal then return true end
+                                if pctMin ~= pctMax and anglin_rodbreak_bucket(pctMin) == filterVal then return true end
+                                return false
+                            end
+
+                            local rows = {}
+                            for _, entry in ipairs(RODBREAK_ENTRIES) do
+                                if RodBreakFilters.catchType == "All" or RodBreakFilters.catchType == entry.type then
+                                    local breakMin, breakMax, snapMin, snapMax
+                                    if selectedRod then
+                                        local b = anglin_rodbreak_break_chance(effectiveSkill, entry, selectedRod)
+                                        local s = anglin_rodbreak_snap_chance(effectiveSkill, entry, selectedRod)
+                                        breakMin, breakMax, snapMin, snapMax = b, b, s, s
+                                    else
+                                        for _, r in ipairs(RODBREAK_RODS) do
+                                            local b = anglin_rodbreak_break_chance(effectiveSkill, entry, r)
+                                            local s = anglin_rodbreak_snap_chance(effectiveSkill, entry, r)
+                                            if not breakMin or b < breakMin then breakMin = b end
+                                            if not breakMax or b > breakMax then breakMax = b end
+                                            if not snapMin or s < snapMin then snapMin = s end
+                                            if not snapMax or s > snapMax then snapMax = s end
+                                        end
+                                    end
+
+                                    if passes_category(breakMin, breakMax, RodBreakFilters.breakCategory) and
+                                       passes_category(snapMin, snapMax, RodBreakFilters.snapCategory) then
+                                        table.insert(rows, {
+                                            entry = entry,
+                                            breakMin = breakMin, breakMax = breakMax,
+                                            snapMin = snapMin, snapMax = snapMax,
+                                        })
+                                    end
+                                end
+                            end
+
+                            local function rodbreak_sort_key(row)
+                                if RodBreakFilters.sortBy == "Skill Req." then return row.entry.skillLevel
+                                elseif RodBreakFilters.sortBy == "Ranking" then return row.entry.ranking
+                                elseif RodBreakFilters.sortBy == "Rod Break %" then return row.breakMax
+                                elseif RodBreakFilters.sortBy == "Line Snap %" then return row.snapMax
+                                else return row.entry.name end
+                            end
+                            local rodbreakSortAsc = RodBreakFilters.sortDir ~= "Descending"
+                            table.sort(rows, function(a, b)
+                                local ka, kb = rodbreak_sort_key(a), rodbreak_sort_key(b)
+                                if ka == kb then return a.entry.name < b.entry.name end
+                                if rodbreakSortAsc then return ka < kb else return ka > kb end
+                            end)
+
+                            imgui.PushStyleColor(ImGuiCol_Text, Colors.TextSecondary)
+                            imgui.TextUnformatted(string.format("Showing %d/%d", #rows, #RODBREAK_ENTRIES))
+                            imgui.PopStyleColor()
+                            imgui.Spacing()
+
+                            if imgui.BeginChild("RodBreakList", { 0, -40 }, CHILD_FLAG_BORDER) then
+                                for _, row in ipairs(rows) do
+                                    local entry = row.entry
+                                    local normName = normalize_catch_name(entry.name)
+                                    local caught = false
+                                    for caughtFish, _ in pairs(data.state.lifetime.fishCaught) do
+                                        if normalize_catch_name(caughtFish) == normName then
+                                            caught = true
+                                            break
+                                        end
+                                    end
+
+                                    local typeTag = entry.type == "Item" and " [ITEM]" or ""
+                                    local kiTag = entry.keyItem and " [KI]" or ""
+
+                                    imgui.PushStyleColor(ImGuiCol_Text, caught and Colors.CaughtColor or Colors.UncaughtColor)
+                                    imgui.TextUnformatted(string.format("%-26s", entry.name .. typeTag .. kiTag))
+                                    imgui.PopStyleColor()
+
+                                    if imgui.IsItemHovered() then
+                                        imgui.BeginTooltip()
+                                        imgui.PushTextWrapPos(imgui.GetFontSize() * 28)
+                                        imgui.TextUnformatted(entry.name)
+                                        imgui.Separator()
+                                        imgui.TextUnformatted(string.format("Skill: %d  |  Ranking: %d  |  Size: %s%s",
+                                            entry.skillLevel, entry.ranking,
+                                            (entry.sizeType == 1) and "Large" or "Small",
+                                            entry.legendary and "  |  Legendary" or ""))
+                                        imgui.TextWrapped(string.format("Location: %s", entry.location))
+                                        imgui.TextWrapped(string.format("Bait/Lure: %s", entry.bait))
+                                        imgui.TextUnformatted(string.format("Recommended rod: %s", entry.recRod))
+                                        if entry.notes then
+                                            imgui.Separator()
+                                            imgui.PushStyleColor(ImGuiCol_Text, Colors.Accent)
+                                            imgui.TextUnformatted("Notes:")
+                                            imgui.PopStyleColor()
+                                            imgui.TextWrapped(entry.notes)
+                                        end
+                                        if entry.keyItem then
+                                            imgui.Separator()
+                                            imgui.PushStyleColor(ImGuiCol_Text, Colors.Warning)
+                                            imgui.TextUnformatted(string.format("Key Item Required: %s", entry.keyItem))
+                                            imgui.PopStyleColor()
+                                        end
+                                        imgui.PopTextWrapPos()
+                                        imgui.EndTooltip()
+                                    end
+
+                                    imgui.SameLine()
+                                    local breakLabel = (row.breakMin == row.breakMax)
+                                        and string.format("Break: %d%%", row.breakMax)
+                                        or string.format("Break: %d-%d%%", row.breakMin, row.breakMax)
+                                    imgui.PushStyleColor(ImGuiCol_Text, anglin_rodbreak_bucket_color(anglin_rodbreak_bucket(row.breakMax)))
+                                    imgui.TextUnformatted(string.format("%-16s", breakLabel))
+                                    imgui.PopStyleColor()
+
+                                    imgui.SameLine()
+                                    local snapLabel = (row.snapMin == row.snapMax)
+                                        and string.format("Snap: %d%%", row.snapMax)
+                                        or string.format("Snap: %d-%d%%", row.snapMin, row.snapMax)
+                                    imgui.PushStyleColor(ImGuiCol_Text, anglin_rodbreak_bucket_color(anglin_rodbreak_bucket(row.snapMax)))
+                                    imgui.TextUnformatted(snapLabel)
+                                    imgui.PopStyleColor()
+                                end
+
+                                if #rows == 0 then
+                                    imgui.PushStyleColor(ImGuiCol_Text, Colors.TextMuted)
+                                    imgui.TextUnformatted("No fish match the current filters.")
+                                    imgui.PopStyleColor()
+                                end
+
+                                imgui.EndChild()
+                            end
+                        end
+
+                        imgui.EndTabItem()
+                    end
                 end
+
+                -- Fixed left-to-right order regardless of which tab was
+                -- programmatically selected (see guideTabFlags/etc. above,
+                -- which use ImGuiTabItemFlags_SetSelected instead of call
+                -- order to pick the active tab) -- the same technique the
+                -- Stats window's Daily/Lifetime tabs already use.
+                render_guide_tab()
+                render_rodbreak_tab()
+                render_skillups_tab()
+                render_isolating_tab()
+
 
                 imgui.EndTabBar()
             end -- TabBar
