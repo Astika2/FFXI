@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.4'
+addon.version   = '4.4.1'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -3745,8 +3745,13 @@ local function render_guide_window()
                 local function render_guide_tab()
                     local guideTabFlags = (guideTabNeedsRestore and activeGuideTab == "Guide") and ImGuiTabItemFlags_SetSelected or 0
                     if imgui.BeginTabItem("Guide", nil, guideTabFlags) then
-                        if activeGuideTab ~= "Guide" then activeGuideTab = "Guide" end
-                        guideTabNeedsRestore = false
+                        -- Only claim the active tab when no switch is pending or this tab is
+                        -- the pending target (the previously-selected tab still renders on
+                        -- the frame SetSelected is issued and must not cancel the switch).
+                        if not guideTabNeedsRestore or activeGuideTab == "Guide" then
+                            activeGuideTab = "Guide"
+                            guideTabNeedsRestore = false
+                        end
             
             drawSection("Filters")
             
@@ -3954,8 +3959,13 @@ local function render_guide_window()
                 local function render_skillups_tab()
                     local skillupsTabFlags = (guideTabNeedsRestore and activeGuideTab == "Skillups") and ImGuiTabItemFlags_SetSelected or 0
                     if imgui.BeginTabItem("Skillups", nil, skillupsTabFlags) then
-                        if activeGuideTab ~= "Skillups" then activeGuideTab = "Skillups" end
-                        guideTabNeedsRestore = false
+                        -- Only claim the active tab when no switch is pending or this tab is
+                        -- the pending target (the previously-selected tab still renders on
+                        -- the frame SetSelected is issued and must not cancel the switch).
+                        if not guideTabNeedsRestore or activeGuideTab == "Skillups" then
+                            activeGuideTab = "Skillups"
+                            guideTabNeedsRestore = false
+                        end
                     local playerSkill = get_fishing_skill()
 
                     if not playerSkill then
@@ -4116,8 +4126,13 @@ local function render_guide_window()
                 local function render_isolating_tab()
                     local isolatingTabFlags = (guideTabNeedsRestore and activeGuideTab == "Isolating") and ImGuiTabItemFlags_SetSelected or 0
                     if imgui.BeginTabItem("Isolating Baits", nil, isolatingTabFlags) then
-                        if activeGuideTab ~= "Isolating" then activeGuideTab = "Isolating" end
-                        guideTabNeedsRestore = false
+                        -- Only claim the active tab when no switch is pending or this tab is
+                        -- the pending target (the previously-selected tab still renders on
+                        -- the frame SetSelected is issued and must not cancel the switch).
+                        if not guideTabNeedsRestore or activeGuideTab == "Isolating" then
+                            activeGuideTab = "Isolating"
+                            guideTabNeedsRestore = false
+                        end
 
                         drawSection("Filters")
 
@@ -4209,8 +4224,13 @@ local function render_guide_window()
                 local function render_rodbreak_tab()
                     local rodbreakTabFlags = (guideTabNeedsRestore and activeGuideTab == "RodBreak") and ImGuiTabItemFlags_SetSelected or 0
                     if imgui.BeginTabItem("Rod Breaking", nil, rodbreakTabFlags) then
-                        if activeGuideTab ~= "RodBreak" then activeGuideTab = "RodBreak" end
-                        guideTabNeedsRestore = false
+                        -- Only claim the active tab when no switch is pending or this tab is
+                        -- the pending target (the previously-selected tab still renders on
+                        -- the frame SetSelected is issued and must not cancel the switch).
+                        if not guideTabNeedsRestore or activeGuideTab == "RodBreak" then
+                            activeGuideTab = "RodBreak"
+                            guideTabNeedsRestore = false
+                        end
 
                         if RodBreakNeedsRodDetect then
                             RodBreakNeedsRodDetect = false
