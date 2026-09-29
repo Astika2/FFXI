@@ -1,3 +1,6 @@
+VERSION 4.4.1
+* Minor bugfix - /anglin suggest was not properly targetting the Skillups window after adding the Rod Breaking tab borked the offset. I am dumb. Sorry :)
+
 VERSION 4.4
 * Added Rod Breaking tab which will show what fish/items have a chance at breaking your shit.
 
