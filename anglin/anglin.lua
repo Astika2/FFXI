@@ -1,6 +1,6 @@
 addon.name      = 'anglin'
 addon.author    = 'Astika'
-addon.version   = '4.4.1'
+addon.version   = '4.5'
 addon.desc      = 'Like "Fishaid" plugin, with more insight and tracking. Updated for ToAU'
 addon.link      = 'https://github.com/Astika2/FFXI/tree/main/addons'
 
@@ -47,6 +47,7 @@ local Colors = {
     Legendary = 0xFF7CE8FF,      -- Pale Gold
     Large = 0xFFFAC981,          -- Light Blue
     Small = 0xFFEFD966,          -- Cyan
+    SizeLarge = 0xFFFF9CB4,      -- Soft Lavender (Guide size tag for Large fish; distinct from Small cyan)
     Item = 0xFFE7C7B4,           -- Soft Periwinkle
     Monster = 0xFFC88CFF,        -- Soft Pink
     Good = 0xFF66CF51,           -- Soft Green
@@ -435,6 +436,7 @@ local guideFilters = {
     location = "All",
     skillRange = "All",
     catchType = "All",
+    size = "All",
     showUncaught = true,
 }
 local guideFilterOptionsCache = {
@@ -445,6 +447,7 @@ local guideFilterOptionsCache = {
         "51-60", "61-70", "71-80", "81-90", "91-100", "100+"
     },
     catchTypes = { "All", "Fish", "Item", "Monster" },
+    sizes = { "All", "Small", "Large", "Legendary" },
     dirty = true
 }
 local guideFilterCache = {
@@ -558,136 +561,136 @@ local function calc_gil_value(catchData)
 end
 
 local fishingGuide = {
-	{ name = "Ahtapot", skill = 90, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Ball of Crayfish Paste, Peeled Lobster, Shrimp Lure", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Alabaligi", skill = 37, location = "Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Minnow, Sinking Minnow", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Armored Pisces", skill = 108, location = "Oldton Movalpolos", bait = "Frog Lure, Meatball, Minnow, Sinking Minnow", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Bastore Bream", skill = 86, location = "East Sarutabaruta, Port Bastok, Port Windurst, Sea Serpent Grotto, South Gustaberg, West Sarutabaruta", bait = "Shrimp Lure", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only (not other pools). South Gustaberg and West Sarutabaruta: Seaside only.", type = "Fish" },
-	{ name = "Bastore Sardine", skill = 9, location = "Batallia Downs, Bibiki Bay, Cape Teriggan, East Sarutabaruta, Kazham, Lower Jeuno, Manaclipper, Mhaura, Norg, Port Bastok, Port Jeuno, Port Windurst, Sea Serpent Grotto, Selbina, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates), South Gustaberg, Valkurm Dunes, West Sarutabaruta", bait = "Sabiki Rig", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Bibiki Bay: not available at PI - South Beach. South Gustaberg and West Sarutabaruta: Seaside only (not inland ponds).", type = "Fish" },
-	{ name = "Betta", skill = 68, location = "Mamook", bait = "Fly Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Bhefhel Marlin", skill = 61, location = "Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Slice of Bluetail", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Bibiki Urchin", skill = 3, location = "Bibiki Bay, Manaclipper", bait = "Any", rod = "Halcyon Rod", notes = "Bibiki Bay: PI beaches only (South/North/West/East) - not available on BB side.", type = "Fish" },
-	{ name = "Bibikibo", skill = 8, location = "Bibiki Bay, Manaclipper", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Bibiki Bay: PI - South Beach only (not North/West/East Beach and not BB side).", type = "Fish" },
-	{ name = "Black Bubble-Eye", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", type = "Fish" },
-	{ name = "Black Eel", skill = 47, location = "Bastok Markets, Gusgen Mines, Korroloka Tunnel, North Gustaberg, Oldton Movalpolos, Palborough Mines, Zeruhn Mines", bait = "Ball of Crayfish Paste, Shell Bug", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Black Ghost", skill = 88, location = "Caedarva Mire", bait = "Minnow", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Black Sole", skill = 96, location = "Batallia Downs, Beaucedine Glacier, Lower Jeuno, Port Jeuno, Qufim Island, Sauromugue Champaign", bait = "Sinking Minnow", rod = "Halcyon Rod", notes = "Beaucedine Glacier: Seaside only (not Ponds).", type = "Fish" },
-	{ name = "Bladefish", skill = 71, location = "Bibiki Bay, East Sarutabaruta, Manaclipper, South Gustaberg, West Sarutabaruta", bait = "Meatball, Slice of Bluetail", rod = "Composite Fishing Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Bibiki Bay: BB - South Seaside only. South Gustaberg and West Sarutabaruta: Seaside only.", type = "Fish" },
-	{ name = "Blindfish", skill = 28, location = "Aydeewa Subterrane, Oldton Movalpolos", bait = "Ball of Insect Paste", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Bluetail", skill = 55, location = "Batallia Downs, Beaucedine Glacier, Bibiki Bay, Buburimu Peninsula, Den of Rancor, East Sarutabaruta, Manaclipper, Qufim Island, Sauromugue Champaign, Sea Serpent Grotto, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates), West Sarutabaruta", bait = "Minnow", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Bibiki Bay: PI - North/West/East Beach only (not PI - South Beach or BB side). Den of Rancor: Pools E-8 and F-11 (not Misc Water). Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only.", type = "Fish" },
-	{ name = "Caedarva Frog", skill = 30, location = "Caedarva Mire", bait = "Fly Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Calico Comet", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", type = "Fish" },
-	{ name = "Cave Cherax", skill = 130, location = "Aydeewa Subterrane, Kuftal Tunnel, Quicksand Caves", bait = "Meatball, Rotten Meat", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Cheval Salmon", skill = 21, location = "East Ronfaure, Ghelsba Outpost, Jugner Forest", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Ghelsba Outpost: River only (not ponds). Jugner Forest: River only (not lakes or springs).", type = "Fish" },
-	{ name = "Cone Calamary", skill = 48, location = "Batallia Downs, Beaucedine Glacier, Bibiki Bay, Manaclipper, Qufim Island, Sauromugue Champaign, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Minnow", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Copper Frog", skill = 16, location = "Bastok Mines, Eastern Altepa Desert, Gusgen Mines, Korroloka Tunnel, North Gustaberg, Oldton Movalpolos, Palborough Mines, Pashhow Marshlands, Zeruhn Mines", bait = "Fly Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Coral Butterfly", skill = 40, location = "Den of Rancor, Kazham, Norg, Sea Serpent Grotto", bait = "Worm Lure", rod = "Halcyon Rod", notes = "Den of Rancor: Pools E-8 and F-11 only (not Misc Water). Sea Serpent Grotto: not available in Misc Puddles.", type = "Fish" },
-	{ name = "Crayfish", skill = 7, location = "Al Zahbi, Bastok Markets, Bastok Mines, Bostaunieux Oubliette, Caedarva Mire, Carpenters' Landing, Castle Oztroja, Dangruf Wadi, Davoi, Dragon's Aery, East Ronfaure, East Sarutabaruta, Eastern Altepa Desert, Ghelsba Outpost, Giddeus, Gusgen Mines, Jugner Forest, Korroloka Tunnel, La Theine Plateau, Mamook, North Gustaberg, Northern San d'Oria, Oldton Movalpolos, Ordelle's Caves, Palborough Mines, Pashhow Marshlands, Phanauet Channel, Phomiuna Aqueducts, Port San d'Oria, Quicksand Caves, Rabao, Ranguemont Pass, Rolanberry Fields, Ru'Aun Gardens, Tavnazian Safehold, Temple of Uggalepih, The Boyahda Tree, The Shrine of Ru'Avitau, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yughott Grotto, Yuhtunga Jungle, Zeruhn Mines", bait = "Slice of Moat Carp", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Crescent Fish", skill = 69, location = "Dragon's Aery, East Sarutabaruta, Yuhtunga Jungle", bait = "Fly Lure", rod = "Halcyon Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Yuhtunga Jungle: Northeast Pond and Gremini Falls only.", type = "Fish" },
-	{ name = "Crystal Bass", skill = 35, location = "Jugner Forest, The Sanctuary of Zi'Tah", bait = "Minnow, Sinking Minnow", rod = "Halcyon Rod", notes = "Jugner Forest: Crystalwater Spring only (not lakes or river).", type = "Fish" },
-	{ name = "Dark Bass", skill = 33, location = "Bastok Markets, Bhaflau Thickets, Caedarva Mire, Carpenters' Landing, Davoi, Giddeus, Jugner Forest, La Theine Plateau, Lufaise Meadows, Misareaux Coast, Phanauet Channel, Rolanberry Fields, The Boyahda Tree, The Sanctuary of Zi'Tah, Wajaom Woodlands, West Sarutabaruta", bait = "Ball of Sardine Paste, Ball of Trout Paste, Minnow", rod = "Halcyon Rod", notes = "Bastok Markets: South Side only (not North Side). Davoi: Pond only. Giddeus: Giddeus Spring and main ponds (not Misc Puddles). Jugner Forest: Lake Mechieume only (not springs or river). Lufaise Meadows: Leremieu Lagoon only. Misareaux Coast: Cascade Edellaine only. Rolanberry Fields: Fountain of Promises and Fountain of Partings only (not small fountains).", type = "Fish" },
-	{ name = "Dil", skill = 96, location = "Talacca Cove", bait = "Slice of Cod", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Elshimo Frog", skill = 30, location = "Yhoator Jungle, Yuhtunga Jungle", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Yhoator Jungle: Front of Temple areas and Underground Pool 2/3 only (not Teardrop Spring, Pool 1, or Bloodlet Spring). Yuhtunga Jungle: Northeast Pond, Gremini Falls, and riverbanks only (not southwest areas).", type = "Fish" },
-	{ name = "Elshimo Newt", skill = 60, location = "Yhoator Jungle, Yuhtunga Jungle", bait = "Frog Lure", rod = "Halcyon Rod", notes = "Yhoator Jungle: Front of Temple - West Side, Underground Pools 2 and 3 only. Yuhtunga Jungle: Gremini Falls and all southwest/riverside areas - not Northeast Pond.", type = "Fish" },
-	{ name = "Emperor Fish", skill = 91, location = "Beaucedine Glacier, Jugner Forest, Lufaise Meadows, The Boyahda Tree", bait = "Ball of Sardine Paste, Ball of Trout Paste, Peeled Crayfish", rod = "Composite Fishing Rod", notes = "Beaucedine Glacier: Ponds only (not Seaside). Jugner Forest: Lake Mechieume - Mouth only. Lufaise Meadows: Leremieu Lagoon only. The Boyahda Tree: hidden Waterfall Basin pool only.", type = "Fish" },
-	{ name = "Fat Greedie", skill = 24, location = "Selbina", bait = "Ball of Crayfish Paste, Lugworm, Minnow, Sinking Minnow, Slice of Sardine, Worm Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Forest Carp", skill = 20, location = "Yhoator Jungle, Yuhtunga Jungle", bait = "Ball of Insect Paste", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Gavial Fish", skill = 81, location = "Gusgen Mines, North Gustaberg, Western Altepa Desert", bait = "Lizard Lure, Meatball", rod = "Composite Fishing Rod", notes = "Gusgen Mines: Interior Pools only (not upper/lower pools). North Gustaberg: Basin of Waterfall only (not River). Western Altepa Desert: Oasis of Hubol only (not Central Spring).", type = "Fish" },
-	{ name = "Giant Catfish", skill = 31, location = "Bastok Markets, Carpenters' Landing, Davoi, Ghelsba Outpost, Giddeus, Jugner Forest, La Theine Plateau, Pashhow Marshlands, Phanauet Channel, Port San d'Oria, Rolanberry Fields, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Zeruhn Mines", bait = "Minnow, Sinking Minnow", rod = "Composite Fishing Rod", notes = "Bastok Markets: South Side only (not North Side). Carpenters' Landing: inland waterways only (not landing areas). Davoi: Pond only. Ghelsba Outpost: Ponds only (not River). Giddeus: Pond - North only. Jugner Forest: Lake Mechieume - Main only. Rolanberry Fields: Fountain of Promises and Fountain of Partings only. Zeruhn Mines: River only (not Pool).", type = "Fish" },
-	{ name = "Giant Chirai", skill = 110, location = "The Boyahda Tree", bait = "Lufaise Fly", rod = "Composite Fishing Rod", notes = "The Boyahda Tree: Waterfall Basin only (not other areas).", type = "Fish" },
-	{ name = "Giant Donko", skill = 50, location = "Eastern Altepa Desert, Kuftal Tunnel, Rabao, Western Altepa Desert", bait = "Peeled Crayfish", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Gigant Squid", skill = 91, location = "Beaucedine Glacier, Qufim Island", bait = "Minnow, Slice of Cod", rod = "Composite Fishing Rod", notes = "Beaucedine Glacier: Seaside only (not Ponds). Qufim Island: Northwest Seaside only.", type = "Fish" },
-	{ name = "Gold Carp", skill = 56, location = "Bastok Markets, Davoi, East Ronfaure, Ghelsba Outpost, Gusgen Mines, Jugner Forest, Lufaise Meadows, Misareaux Coast, North Gustaberg, Northern San d'Oria, Phanauet Channel, Port San d'Oria, Windurst Walls, Windurst Waters, Windurst Woods", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Gold Lobster", skill = 46, location = "Den of Rancor, East Sarutabaruta, South Gustaberg, West Sarutabaruta", bait = "Sinking Minnow", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Den of Rancor: Pool E-8 only (not Pool F-11). South Gustaberg and West Sarutabaruta: Seaside only.", type = "Fish" },
-	{ name = "Greedie", skill = 14, location = "Cape Teriggan, Lufaise Meadows, Misareaux Coast, Selbina, Valkurm Dunes", bait = "Minnow", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Grimmonite", skill = 90, location = "Sea Serpent Grotto", bait = "Shrimp Lure", rod = "Composite Fishing Rod", notes = "Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only.", type = "Fish" },
-	{ name = "Gugru Tuna", skill = 41, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Sinking Minnow", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Gugrusaurus", skill = 140, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Composite Fishing Rod", type = "Fish", keyItem = "Serpent Rumors" },
-	{ name = "Gurnard", skill = 26, location = "Open sea route to Al Zahbi, Open sea route to Mhaura", bait = "Ball of Crayfish Paste, Slice of Sardine", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Hamsi", skill = 9, location = "Aht Urhgan Whitegate, Mount Zhayolm, Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Sabiki Rig", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Icefish", skill = 49, location = "Beaucedine Glacier", bait = "Sabiki Rig", rod = "Halcyon Rod", notes = "Beaucedine Glacier: Ponds only (not Seaside).", type = "Fish" },
-	{ name = "Istakoz", skill = 46, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Sinking Minnow", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Istavrit", skill = 37, location = "Talacca Cove", bait = "Lugworm", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Istiridye", skill = 53, location = "Arrapago Reef, Nashmau", bait = "Ball of Crayfish Paste", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Jungle Catfish", skill = 80, location = "Yhoator Jungle, Yuhtunga Jungle", bait = "Ball of Sardine Paste, Ball of Trout Paste, Minnow", rod = "Composite Fishing Rod", notes = "Yhoator Jungle: Front of Temple areas and Underground Pool 1 only. Yuhtunga Jungle: Northeast Pond and Southwest Pond only (not falls or riverside).", type = "Fish" },
-	{ name = "Kalamar", skill = 48, location = "Aht Urhgan Whitegate, Mount Zhayolm, Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Slice of Bluetail", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Kalkanbaligi", skill = 105, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Shrimp Lure", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Kaplumbaga", skill = 53, location = "Caedarva Mire", bait = "Frog Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Kayabaligi", skill = 75, location = "Al Zahbi, Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Sinking Minnow", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Kilicbaligi", skill = 62, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Slice of Bluetail", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Lakerda", skill = 41, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Sinking Minnow", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Lamp Marimo", skill = 3, location = "Aydeewa Subterrane", bait = "Fly Lure, Lugworm, Sabiki Rig", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Lik", skill = 140, location = "Lufaise Meadows", bait = "Minnow, Sinking Minnow, Dwarf Pugil", rod = "Composite Fishing Rod", notes = "Lufaise Meadows: Leremieu Lagoon only (not Seaside or river).", type = "Fish", keyItem = "Serpent Rumors" },
-	{ name = "Lionhead", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", type = "Fish" },
-	{ name = "Lungfish", skill = 32, location = "Phanauet Channel", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Mercanbaligi", skill = 86, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Moat Carp", skill = 11, location = "Al Zahbi, Bastok Markets, Davoi, Dragon's Aery, East Sarutabaruta, Eastern Altepa Desert, Jugner Forest, Korroloka Tunnel, La Theine Plateau, Misareaux Coast, Northern San d'Oria, Port San d'Oria, Rabao, Rolanberry Fields, Temple of Uggalepih, The Boyahda Tree, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle, Zeruhn Mines", bait = "Ball of Insect Paste", rod = "Halcyon Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Davoi: Pond only (not waterfalls or other areas). Korroloka Tunnel: Salt Water side only.", type = "Fish" },
-	{ name = "Mola Mola", skill = 135, location = "Open sea route to Al Zahbi, Open sea route to Mhaura", bait = "Shrimp Lure", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Monke-Onke", skill = 51, location = "East Sarutabaruta, Giddeus, Yhoator Jungle, Yuhtunga Jungle", bait = "Shrimp Lure", rod = "Composite Fishing Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Giddeus: Giddeus Spring only (not other ponds). Yhoator Jungle: Underground Pool 1 only. Yuhtunga Jungle: Northeast Pond only.", type = "Fish" },
-	{ name = "Moorish Idol", skill = 26, location = "Bibiki Bay, Manaclipper", bait = "Shrimp Lure, Worm Lure", rod = "Halcyon Rod", notes = "Bibiki Bay: PI beaches only (South/North/West/East) - not available on BB side.", type = "Fish" },
-	{ name = "Morinabaligi", skill = 94, location = "Bhaflau Thickets, Wajaom Woodlands", bait = "Ball of Sardine Paste, Ball of Trout Paste", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Muddy Siredon", skill = 18, location = "Carpenters' Landing, Phanauet Channel", bait = "Frog Lure", rod = "Halcyon Rod", notes = "Carpenters' Landing: inland waterways and landing docks (not the Central Landing).", type = "Fish" },
-	{ name = "Nebimonite", skill = 27, location = "Sea Serpent Grotto, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Ball of Crayfish Paste", rod = "Halcyon Rod", notes = "Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only.", type = "Fish" },
-	{ name = "Noble Lady", skill = 66, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Sinking Minnow", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Nosteau Herring", skill = 39, location = "Batallia Downs, Beaucedine Glacier, Lower Jeuno, Port Jeuno, Qufim Island", bait = "Ball of Sardine Paste, Lugworm, Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Ogre Eel", skill = 35, location = "East Sarutabaruta, South Gustaberg, West Sarutabaruta", bait = "Shrimp Lure", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). South Gustaberg and West Sarutabaruta: Seaside only.", type = "Fish" },
-	{ name = "Pearlscale", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", type = "Fish" },
-	{ name = "Phanauet Newt", skill = 4, location = "Carpenters' Landing, Phanauet Channel", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Carpenters' Landing: inland waterways only (not landing docks).", type = "Fish" },
-	{ name = "Pipira", skill = 29, location = "East Sarutabaruta, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle", bait = "Minnow", rod = "Halcyon Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Yhoator Jungle: Front of Temple - East Side only. Yuhtunga Jungle: Southwest Waterfall and Southwest Pond only (not Northeast Pond, Gremini Falls, or riverbanks).", type = "Fish" },
-	{ name = "Pterygotus", skill = 99, location = "Nashmau", bait = "Lugworm", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Quus", skill = 19, location = "Bibiki Bay, Cape Teriggan, Den of Rancor, East Sarutabaruta, Kazham, Korroloka Tunnel, Lufaise Meadows, Manaclipper, Misareaux Coast, Norg, Port Bastok, Port Windurst, Sea Serpent Grotto, Selbina, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates), South Gustaberg, Valkurm Dunes, West Sarutabaruta", bait = "Lugworm", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Red Terrapin", skill = 53, location = "Davoi, Ghelsba Outpost, Giddeus, Jugner Forest, La Theine Plateau, Pashhow Marshlands, Phanauet Channel, Rolanberry Fields, The Sanctuary of Zi'Tah, West Ronfaure", bait = "Frog Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Rhinochimera", skill = 72, location = "Arrapago Reef", bait = "Sinking Minnow", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Ryugu Titan", skill = 150, location = "Den of Rancor, Manaclipper, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Slice of Cod", rod = "Composite Fishing Rod", notes = "Den of Rancor: Pool F-11 only (not Pool E-8).", type = "Fish" },
-	{ name = "Sandfish", skill = 50, location = "Eastern Altepa Desert, Korroloka Tunnel, Kuftal Tunnel, Rabao, Western Altepa Desert", bait = "Worm Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Sazanbaligi", skill = 56, location = "Al Zahbi, Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Ball of Insect Paste, Little Worm, Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Sea Zombie", skill = 100, location = "Ship bound for Mhaura (with Pirates), Ship bound for Selbina (with Pirates)", bait = "Drill Calamary, Meatball, Slice of Bluetail", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Shall Shell", skill = 53, location = "Bibiki Bay, Buburimu Peninsula, Cape Teriggan, Valkurm Dunes", bait = "Robber Rig", rod = "Halcyon Rod", notes = "Bibiki Bay: PI beaches only (South/North/West/East) - not available on BB side.", type = "Fish" },
-	{ name = "Shining Trout", skill = 37, location = "Carpenters' Landing, East Ronfaure, Ghelsba Outpost, Jugner Forest, Phanauet Channel", bait = "Fly Lure, Minnow, Sinking Minnow", rod = "Halcyon Rod", notes = "Carpenters' Landing: South/North Landing only (not central or inland pools). Ghelsba Outpost: River only (not ponds). Jugner Forest: River only.", type = "Fish" },
-	{ name = "Silver Shark", skill = 76, location = "Batallia Downs, Sauromugue Champaign, Sea Serpent Grotto, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Halcyon Rod", notes = "Sea Serpent Grotto: Mythril door area only (not Pond Under a Bridge or other areas).", type = "Fish" },
-	{ name = "Takitaro", skill = 101, location = "Davoi, Misareaux Coast", bait = "Fly Lure", rod = "Composite Fishing Rod", notes = "Davoi: Basin of a Waterfall only. Misareaux Coast: Cascade Edellaine only.", type = "Fish" },
-	{ name = "Tavnazian Goby", skill = 75, location = "Lufaise Meadows, Misareaux Coast", bait = "Minnow", rod = "Halcyon Rod", notes = "Lufaise Meadows: Leremieu Lagoon and Rafeloux River only (not Seaside). Misareaux Coast: Rafeloux River and Cascade Edellaine only (not Seaside).", type = "Fish" },
-	{ name = "Three-Eyed Fish", skill = 79, location = "Qufim Island", bait = "Minnow, Slice of Cod", rod = "Composite Fishing Rod", notes = "Qufim Island: Southwest Seaside only (not Northwest or other areas).", type = "Fish" },
-	{ name = "Tiger Cod", skill = 29, location = "Batallia Downs, Beaucedine Glacier, Lower Jeuno, Port Jeuno, Qufim Island, Sauromugue Champaign", bait = "Lugworm, Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Tiny Goldfish", skill = 20, location = "Al Zahbi, South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Ball of Insect Paste, Little Worm, Worm Lure, Super Scoop", rod = "Halcyon Rod, Goldfish Basket", notes = "Available in S.Gusta, W.Ron, and E.Saruta during the Sunbreeze Festival event using Goldfish Basket and Super Scoop", type = "Fish" },
-	{ name = "Titanic Sawfish", skill = 125, location = "Manaclipper", bait = "Meatball, Slice of Cod", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Titanictus", skill = 101, location = "Manaclipper, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Tricolored Carp", skill = 27, location = "Bastok Markets, Davoi, East Ronfaure, Ghelsba Outpost, Giddeus, Gusgen Mines, Jugner Forest, North Gustaberg, Northern San d'Oria, Palborough Mines, Phanauet Channel, Port San d'Oria, The Boyahda Tree, Zeruhn Mines", bait = "Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Tricorn", skill = 128, location = "Phanauet Channel", bait = "Fly Lure, Lufaise Fly", rod = "Composite Fishing Rod", type = "Fish", keyItem = "Frog Fishing" },
-	{ name = "Trilobite", skill = 59, location = "Bibiki Bay, Manaclipper", bait = "Worm Lure", rod = "Halcyon Rod", notes = "Bibiki Bay: PI - South Beach and PI - North Beach only (not West/East Beach and not BB side).", type = "Fish" },
-	{ name = "Turnabaligi", skill = 104, location = "Bhaflau Thickets, Wajaom Woodlands", bait = "Shrimp Lure", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Uskumru", skill = 55, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Minnow, Shrimp Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Veydal Wrasse", skill = 35, location = "Open sea route to Al Zahbi, Open sea route to Mhaura", bait = "Slice of Bluetail", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Vongola Clam", skill = 53, location = "Bibiki Bay, Manaclipper", bait = "Ball of Crayfish Paste, Peeled Crayfish", rod = "Halcyon Rod", notes = "Bibiki Bay: PI beaches only (South/North/West/East) - not available on BB side.", type = "Fish" },
-	{ name = "Yayinbaligi", skill = 31, location = "Caedarva Mire", bait = "Frog Lure, Minnow, Sinking Minnow, Worm Lure", rod = "Composite Fishing Rod", type = "Fish" },
-	{ name = "Yellow Globe", skill = 17, location = "Batallia Downs, Beaucedine Glacier, Buburimu Peninsula, Lower Jeuno, Mhaura, Norg, Open sea route to Al Zahbi, Open sea route to Mhaura, Port Jeuno, Qufim Island, Sauromugue Champaign", bait = "Ball of Crayfish Paste, Sabiki Rig, Worm Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Yilanbaligi", skill = 47, location = "Al Zahbi, Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Ball of Sardine Paste, Ball of Trout Paste, Little Worm, Peeled Crayfish, Shell Bug, Sinking Minnow, Worm Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Zafmlug Bass", skill = 43, location = "Bibiki Bay, Cape Teriggan, Manaclipper, Port Bastok, Selbina, South Gustaberg, Valkurm Dunes", bait = "Worm Lure", rod = "Halcyon Rod", type = "Fish" },
-	{ name = "Zebra Eel", skill = 71, location = "Den of Rancor", bait = "Shrimp Lure, Slice of Sardine", rod = "Halcyon Rod", notes = "Den of Rancor: Pool E-8 only (not Pool F-11).", type = "Fish" },
-	{ name = "Arrowwood Log", skill = 4, location = "Beaucedine Glacier, Buburimu Peninsula, Carpenters' Landing, Davoi, Dragon's Aery, East Ronfaure, Jugner Forest, Kazham, Lufaise Meadows, Misareaux Coast, The Boyahda Tree, The Sanctuary of Zi'Tah, Valkurm Dunes, West Ronfaure, Yhoator Jungle, Yuhtunga Jungle", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Bugbear Mask", skill = 54, location = "Oldton Movalpolos", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Cobalt Jellyfish", skill = 5, location = "Batallia Downs, Bibiki Bay, Cape Teriggan, Den of Rancor, Kazham, Lower Jeuno, Lufaise Meadows, Manaclipper, Misareaux Coast, Norg, Open sea route to Al Zahbi, Open sea route to Mhaura, Port Bastok, Port Jeuno, Sea Serpent Grotto, Selbina, South Gustaberg, Valkurm Dunes", bait = "Ball of Crayfish Paste, Ball of Insect Paste, Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Frog Lure, Little Worm, Lizard Lure, Lufaise Fly, Lugworm, Meatball, Minnow, Peeled Crayfish, Peeled Lobster, Robber Rig, Rogue Rig, Sabiki Rig, Shell Bug, Shrimp Lure, Sinking Minnow, Slice Of Bluetail, Slice Of Carp, Slice Of Cod, Slice of Sardine, Worm Lure", rod = "Halcyon Rod", type = "Item" },
-	{ name = "Copper ring", skill = 24, location = "Bastok Markets, Bastok Mines, Beaucedine Glacier, Bostaunieux Oubliette, Buburimu Peninsula, Dragon's Aery, East Ronfaure, Eastern Altepa Desert, Fei'Yin, Heavens Tower, Kazham, Lower Jeuno, Mhaura, Norg, Northern San d'Oria, Oldton Movalpolos, Port Jeuno, Qufim Island, Ro'Maeve, Ru'Aun Gardens, Temple of Uggalepih, The Boyahda Tree, The Shrine of Ru'Avitau, Yhoator Jungle, Yuhtunga Jungle", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Coral Fragment", skill = 74, location = "Bibiki Bay, Den of Rancor, Korroloka Tunnel, Labyrinth of Onzozo, Sea Serpent Grotto", bait = "Any", rod = "Any", notes = "Bibiki Bay: PI beaches only (not BB side). Den of Rancor: Pools E-8 and F-11 only (not Misc Water). Sea Serpent Grotto: not in Gold door area or Misc Puddles.", type = "Item" },
-	{ name = "Damp Scroll", skill = 20, location = "Sea Serpent Grotto", bait = "Any", rod = "Any", notes = "Sea Serpent Grotto: Pond Under a Bridge only.", type = "Item" },
-	{ name = "Denizanasi", skill = 5, location = "Aht Urhgan Whitegate, Mount Zhayolm", bait = "Ball of Crayfish Paste, Ball of Insect Paste, Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Frog Lure, Little Worm, Lizard Lure, Lufaise Fly, Lugworm, Meatball, Minnow, Peeled Crayfish, Peeled Lobster, Robber Rig, Rogue Rig, Sabiki Rig, Shell Bug, Shrimp Lure, Sinking Minnow, Slice Of Bluetail, Slice Of Carp, Slice Of Cod, Slice of Sardine, Worm Lure", rod = "Halcyon Rod", type = "Item" },
-	{ name = "Fish Scale Shield", skill = 7, location = "Bibiki Bay, Den of Rancor, Qufim Island, Rolanberry Fields", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Gil", skill = 1, location = "Port Windurst", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Hydrogauge", skill = 7, location = "Aht Urhgan Whitegate, Al Zahbi, Nashmau, Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Mithra Snare", skill = 30, location = "Valkurm Dunes", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Moblin Mask", skill = 54, location = "Oldton Movalpolos", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Mythril Dagger", skill = 90, location = "Beaucedine Glacier, Dragon's Aery, Port Jeuno", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Mythril Sword", skill = 90, location = "Batallia Downs, Beaucedine Glacier, Bostaunieux Oubliette, Dragon's Aery, Gusgen Mines, Qufim Island, Rolanberry Fields, Sauromugue Champaign", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Norg Shell", skill = 14, location = "Sea Serpent Grotto", bait = "Any", rod = "Any", notes = "Sea Serpent Grotto: Other Seaside, Pond Under a Bridge, and Mythril door area only (not Gold door or Misc Puddles).", type = "Item" },
-	{ name = "Pamtam Kelp", skill = 3, location = "Bibiki Bay, Buburimu Peninsula, Den of Rancor, East Sarutabaruta, Kazham, Manaclipper, Mhaura, Norg, Open sea route to Al Zahbi, Open sea route to Mhaura, Port Windurst, Sea Serpent Grotto, West Sarutabaruta", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Ripped cap", skill = 20, location = "Kazham, Port Windurst", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Rusty Bucket", skill = 1, location = "Al Zahbi, Bastok Markets, Bastok Mines, Bhaflau Thickets, Bibiki Bay, Buburimu Peninsula, Carpenters' Landing, Dangruf Wadi, Davoi, Dragon's Aery, East Sarutabaruta, Giddeus, Gusgen Mines, Jugner Forest, Kazham, Korroloka Tunnel, Kuftal Tunnel, La Theine Plateau, Lower Jeuno, Mamook, Manaclipper, Norg, North Gustaberg, Open sea route to Al Zahbi, Open sea route to Mhaura, Ordelle's Caves, Palborough Mines, Phanauet Channel, Port Bastok, Port Jeuno, Port San d'Oria, Rabao, Rolanberry Fields, Sea Serpent Grotto, Selbina, South Gustaberg, Tavnazian Safehold, Valkurm Dunes, Wajaom Woodlands, West Ronfaure, West Sarutabaruta, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle, Zeruhn Mines", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Rusty Cap", skill = 30, location = "Bibiki Bay, Buburimu Peninsula, Davoi, Den of Rancor, Jugner Forest, Korroloka Tunnel, Kuftal Tunnel, La Theine Plateau, Mhaura, Ordelle's Caves, Pashhow Marshlands, Rabao, Rolanberry Fields, South Gustaberg, Valkurm Dunes, Western Altepa Desert, Yughott Grotto", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Rusty Greatsword", skill = 60, location = "Batallia Downs, Davoi, Den of Rancor, Eastern Altepa Desert, Korroloka Tunnel, Oldton Movalpolos, Sea Serpent Grotto", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Rusty Leggings", skill = 7, location = "Al Zahbi, Arrapago Reef, Aydeewa Subterrane, Bastok Markets, Bastok Mines, Bibiki Bay, Bostaunieux Oubliette, Buburimu Peninsula, Caedarva Mire, Cape Teriggan, Carpenters' Landing, Davoi, Dragon's Aery, East Sarutabaruta, Giddeus, Gusgen Mines, Jugner Forest, Kazham, Korroloka Tunnel, Labyrinth of Onzozo, Lower Delkfutt's Tower, Lower Jeuno, Mamook, Mhaura, Middle Delkfutt's Tower, Nashmau, Norg, North Gustaberg, Northern San d'Oria, Open sea route to Al Zahbi, Open sea route to Mhaura, Ordelle's Caves, Port Bastok, Port Jeuno, Port San d'Oria, Port Windurst, Qufim Island, Rabao, Rolanberry Fields, Sauromugue Champaign, Selbina, South Gustaberg, Talacca Cove, The Boyahda Tree, Upper Delkfutt's Tower, Valkurm Dunes, Wajaom Woodlands, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yughott Grotto, Yuhtunga Jungle, Zeruhn Mines", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Rusty Pick", skill = 40, location = "Batallia Downs, Buburimu Peninsula, Davoi, Gusgen Mines, Jugner Forest, Korroloka Tunnel, Oldton Movalpolos, Pashhow Marshlands, Rolanberry Fields, Yughott Grotto", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Rusty Subligar", skill = 5, location = "Aht Urhgan Whitegate, Al Zahbi, Arrapago Reef, Aydeewa Subterrane, Bastok Markets, Bastok Mines, Beaucedine Glacier, Bhaflau Thickets, Bibiki Bay, Bostaunieux Oubliette, Buburimu Peninsula, Den of Rancor, East Sarutabaruta, Gusgen Mines, Heavens Tower, Jugner Forest, Kazham, Korroloka Tunnel, Kuftal Tunnel, Lower Jeuno, Mamook, Mount Zhayolm, Nashmau, Norg, North Gustaberg, Northern San d'Oria, Ordelle's Caves, Port Bastok, Port Jeuno, Port San d'Oria, Port Windurst, Qufim Island, Quicksand Caves, Rolanberry Fields, Sauromugue Champaign, Selbina, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates), South Gustaberg, Talacca Cove, Valkurm Dunes, Wajaom Woodlands, West Sarutabaruta, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle, Zeruhn Mines", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Silver Ring", skill = 34, location = "Batallia Downs, Beaucedine Glacier, Buburimu Peninsula, Fei'Yin, Giddeus, Heavens Tower, Jugner Forest, Mhaura, Misareaux Coast, Ordelle's Caves, Pashhow Marshlands, Port Jeuno, Qufim Island, Ro'Maeve, Ru'Aun Gardens, South Gustaberg, The Shrine of Ru'Avitau, Valkurm Dunes, Yhoator Jungle, Yughott Grotto", bait = "Any", rod = "Any", type = "Item" },
-	{ name = "Tarutaru Snare", skill = 30, location = "Valkurm Dunes", bait = "Any", rod = "Any", type = "Item" },
+	{ name = "Ahtapot", skill = 90, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Ball of Crayfish Paste, Peeled Lobster, Shrimp Lure", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Alabaligi", skill = 37, location = "Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Minnow, Sinking Minnow", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Armored Pisces", skill = 108, location = "Oldton Movalpolos", bait = "Frog Lure, Meatball, Minnow, Sinking Minnow", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Bastore Bream", skill = 86, location = "East Sarutabaruta, Port Bastok, Port Windurst, Sea Serpent Grotto, South Gustaberg, West Sarutabaruta", bait = "Shrimp Lure", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only (not other pools). South Gustaberg and West Sarutabaruta: Seaside only.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Bastore Sardine", skill = 9, location = "Batallia Downs, Bibiki Bay, Cape Teriggan, East Sarutabaruta, Kazham, Lower Jeuno, Manaclipper, Mhaura, Norg, Port Bastok, Port Jeuno, Port Windurst, Sea Serpent Grotto, Selbina, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates), South Gustaberg, Valkurm Dunes, West Sarutabaruta", bait = "Sabiki Rig", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Bibiki Bay: not available at PI - South Beach. South Gustaberg and West Sarutabaruta: Seaside only (not inland ponds).", size = "Small", stack = 12, maxHook = 3, type = "Fish" },
+	{ name = "Betta", skill = 68, location = "Mamook", bait = "Fly Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Bhefhel Marlin", skill = 61, location = "Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Slice of Bluetail", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Bibiki Urchin", skill = 3, location = "Bibiki Bay, Manaclipper", bait = "Any", rod = "Halcyon Rod", notes = "Bibiki Bay: PI beaches only (South/North/West/East) - not available on BB side.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Bibikibo", skill = 8, location = "Bibiki Bay, Manaclipper", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Bibiki Bay: PI - South Beach only (not North/West/East Beach and not BB side).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Black Bubble-Eye", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Black Eel", skill = 47, location = "Bastok Markets, Gusgen Mines, Korroloka Tunnel, North Gustaberg, Oldton Movalpolos, Palborough Mines, Zeruhn Mines", bait = "Ball of Crayfish Paste, Shell Bug", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Black Ghost", skill = 88, location = "Caedarva Mire", bait = "Minnow", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Black Sole", skill = 96, location = "Batallia Downs, Beaucedine Glacier, Lower Jeuno, Port Jeuno, Qufim Island, Sauromugue Champaign", bait = "Sinking Minnow", rod = "Halcyon Rod", notes = "Beaucedine Glacier: Seaside only (not Ponds).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Bladefish", skill = 71, location = "Bibiki Bay, East Sarutabaruta, Manaclipper, South Gustaberg, West Sarutabaruta", bait = "Meatball, Slice of Bluetail", rod = "Composite Fishing Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Bibiki Bay: BB - South Seaside only. South Gustaberg and West Sarutabaruta: Seaside only.", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Blindfish", skill = 28, location = "Aydeewa Subterrane, Oldton Movalpolos", bait = "Ball of Insect Paste", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Bluetail", skill = 55, location = "Batallia Downs, Beaucedine Glacier, Bibiki Bay, Buburimu Peninsula, Den of Rancor, East Sarutabaruta, Manaclipper, Qufim Island, Sauromugue Champaign, Sea Serpent Grotto, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates), West Sarutabaruta", bait = "Minnow", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Bibiki Bay: PI - North/West/East Beach only (not PI - South Beach or BB side). Den of Rancor: Pools E-8 and F-11 (not Misc Water). Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Caedarva Frog", skill = 30, location = "Caedarva Mire", bait = "Fly Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Calico Comet", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Cave Cherax", skill = 130, location = "Aydeewa Subterrane, Kuftal Tunnel, Quicksand Caves", bait = "Meatball, Rotten Meat", rod = "Composite Fishing Rod", size = "Legendary", stack = 1, type = "Fish" },
+	{ name = "Cheval Salmon", skill = 21, location = "East Ronfaure, Ghelsba Outpost, Jugner Forest", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Ghelsba Outpost: River only (not ponds). Jugner Forest: River only (not lakes or springs).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Cone Calamary", skill = 48, location = "Batallia Downs, Beaucedine Glacier, Bibiki Bay, Manaclipper, Qufim Island, Sauromugue Champaign, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Minnow", rod = "Halcyon Rod", size = "Small", stack = 12, maxHook = 3, type = "Fish" },
+	{ name = "Copper Frog", skill = 16, location = "Bastok Mines, Eastern Altepa Desert, Gusgen Mines, Korroloka Tunnel, North Gustaberg, Oldton Movalpolos, Palborough Mines, Pashhow Marshlands, Zeruhn Mines", bait = "Fly Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Coral Butterfly", skill = 40, location = "Den of Rancor, Kazham, Norg, Sea Serpent Grotto", bait = "Worm Lure", rod = "Halcyon Rod", notes = "Den of Rancor: Pools E-8 and F-11 only (not Misc Water). Sea Serpent Grotto: not available in Misc Puddles.", size = "Small", stack = 1, type = "Fish" },
+	{ name = "Crayfish", skill = 7, location = "Al Zahbi, Bastok Markets, Bastok Mines, Bostaunieux Oubliette, Caedarva Mire, Carpenters' Landing, Castle Oztroja, Dangruf Wadi, Davoi, Dragon's Aery, East Ronfaure, East Sarutabaruta, Eastern Altepa Desert, Ghelsba Outpost, Giddeus, Gusgen Mines, Jugner Forest, Korroloka Tunnel, La Theine Plateau, Mamook, North Gustaberg, Northern San d'Oria, Oldton Movalpolos, Ordelle's Caves, Palborough Mines, Pashhow Marshlands, Phanauet Channel, Phomiuna Aqueducts, Port San d'Oria, Quicksand Caves, Rabao, Ranguemont Pass, Rolanberry Fields, Ru'Aun Gardens, Tavnazian Safehold, Temple of Uggalepih, The Boyahda Tree, The Shrine of Ru'Avitau, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yughott Grotto, Yuhtunga Jungle, Zeruhn Mines", bait = "Slice of Moat Carp", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Crescent Fish", skill = 69, location = "Dragon's Aery, East Sarutabaruta, Yuhtunga Jungle", bait = "Fly Lure", rod = "Halcyon Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Yuhtunga Jungle: Northeast Pond and Gremini Falls only.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Crystal Bass", skill = 35, location = "Jugner Forest, The Sanctuary of Zi'Tah", bait = "Minnow, Sinking Minnow", rod = "Halcyon Rod", notes = "Jugner Forest: Crystalwater Spring only (not lakes or river).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Dark Bass", skill = 33, location = "Bastok Markets, Bhaflau Thickets, Caedarva Mire, Carpenters' Landing, Davoi, Giddeus, Jugner Forest, La Theine Plateau, Lufaise Meadows, Misareaux Coast, Phanauet Channel, Rolanberry Fields, The Boyahda Tree, The Sanctuary of Zi'Tah, Wajaom Woodlands, West Sarutabaruta", bait = "Ball of Sardine Paste, Ball of Trout Paste, Minnow", rod = "Halcyon Rod", notes = "Bastok Markets: South Side only (not North Side). Davoi: Pond only. Giddeus: Giddeus Spring and main ponds (not Misc Puddles). Jugner Forest: Lake Mechieume only (not springs or river). Lufaise Meadows: Leremieu Lagoon only. Misareaux Coast: Cascade Edellaine only. Rolanberry Fields: Fountain of Promises and Fountain of Partings only (not small fountains).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Dil", skill = 96, location = "Talacca Cove", bait = "Slice of Cod", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Elshimo Frog", skill = 30, location = "Yhoator Jungle, Yuhtunga Jungle", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Yhoator Jungle: Front of Temple areas and Underground Pool 2/3 only (not Teardrop Spring, Pool 1, or Bloodlet Spring). Yuhtunga Jungle: Northeast Pond, Gremini Falls, and riverbanks only (not southwest areas).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Elshimo Newt", skill = 60, location = "Yhoator Jungle, Yuhtunga Jungle", bait = "Frog Lure", rod = "Halcyon Rod", notes = "Yhoator Jungle: Front of Temple - West Side, Underground Pools 2 and 3 only. Yuhtunga Jungle: Gremini Falls and all southwest/riverside areas - not Northeast Pond.", size = "Small", stack = 1, type = "Fish" },
+	{ name = "Emperor Fish", skill = 91, location = "Beaucedine Glacier, Jugner Forest, Lufaise Meadows, The Boyahda Tree", bait = "Ball of Sardine Paste, Ball of Trout Paste, Peeled Crayfish", rod = "Composite Fishing Rod", notes = "Beaucedine Glacier: Ponds only (not Seaside). Jugner Forest: Lake Mechieume - Mouth only. Lufaise Meadows: Leremieu Lagoon only. The Boyahda Tree: hidden Waterfall Basin pool only.", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Fat Greedie", skill = 24, location = "Selbina", bait = "Ball of Crayfish Paste, Lugworm, Minnow, Sinking Minnow, Slice of Sardine, Worm Lure", rod = "Halcyon Rod", size = "Small", stack = 1, type = "Fish" },
+	{ name = "Forest Carp", skill = 20, location = "Yhoator Jungle, Yuhtunga Jungle", bait = "Ball of Insect Paste", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Gavial Fish", skill = 81, location = "Gusgen Mines, North Gustaberg, Western Altepa Desert", bait = "Lizard Lure, Meatball", rod = "Composite Fishing Rod", notes = "Gusgen Mines: Interior Pools only (not upper/lower pools). North Gustaberg: Basin of Waterfall only (not River). Western Altepa Desert: Oasis of Hubol only (not Central Spring).", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Giant Catfish", skill = 31, location = "Bastok Markets, Carpenters' Landing, Davoi, Ghelsba Outpost, Giddeus, Jugner Forest, La Theine Plateau, Pashhow Marshlands, Phanauet Channel, Port San d'Oria, Rolanberry Fields, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Zeruhn Mines", bait = "Minnow, Sinking Minnow", rod = "Composite Fishing Rod", notes = "Bastok Markets: South Side only (not North Side). Carpenters' Landing: inland waterways only (not landing areas). Davoi: Pond only. Ghelsba Outpost: Ponds only (not River). Giddeus: Pond - North only. Jugner Forest: Lake Mechieume - Main only. Rolanberry Fields: Fountain of Promises and Fountain of Partings only. Zeruhn Mines: River only (not Pool).", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Giant Chirai", skill = 110, location = "The Boyahda Tree", bait = "Lufaise Fly", rod = "Composite Fishing Rod", notes = "The Boyahda Tree: Waterfall Basin only (not other areas).", size = "Legendary", stack = 1, type = "Fish" },
+	{ name = "Giant Donko", skill = 50, location = "Eastern Altepa Desert, Kuftal Tunnel, Rabao, Western Altepa Desert", bait = "Peeled Crayfish", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Gigant Squid", skill = 91, location = "Beaucedine Glacier, Qufim Island", bait = "Minnow, Slice of Cod", rod = "Composite Fishing Rod", notes = "Beaucedine Glacier: Seaside only (not Ponds). Qufim Island: Northwest Seaside only.", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Gold Carp", skill = 56, location = "Bastok Markets, Davoi, East Ronfaure, Ghelsba Outpost, Gusgen Mines, Jugner Forest, Lufaise Meadows, Misareaux Coast, North Gustaberg, Northern San d'Oria, Phanauet Channel, Port San d'Oria, Windurst Walls, Windurst Waters, Windurst Woods", bait = "Shrimp Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Gold Lobster", skill = 46, location = "Den of Rancor, East Sarutabaruta, South Gustaberg, West Sarutabaruta", bait = "Sinking Minnow", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). Den of Rancor: Pool E-8 only (not Pool F-11). South Gustaberg and West Sarutabaruta: Seaside only.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Greedie", skill = 14, location = "Cape Teriggan, Lufaise Meadows, Misareaux Coast, Selbina, Valkurm Dunes", bait = "Minnow", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Grimmonite", skill = 90, location = "Sea Serpent Grotto", bait = "Shrimp Lure", rod = "Composite Fishing Rod", notes = "Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only.", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Gugru Tuna", skill = 41, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Sinking Minnow", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Gugrusaurus", skill = 140, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Composite Fishing Rod", size = "Legendary", stack = 1, type = "Fish", keyItem = "Serpent Rumors" },
+	{ name = "Gurnard", skill = 26, location = "Open sea route to Al Zahbi, Open sea route to Mhaura", bait = "Ball of Crayfish Paste, Slice of Sardine", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Hamsi", skill = 9, location = "Aht Urhgan Whitegate, Mount Zhayolm, Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Sabiki Rig", rod = "Halcyon Rod", size = "Small", stack = 12, maxHook = 3, type = "Fish" },
+	{ name = "Icefish", skill = 49, location = "Beaucedine Glacier", bait = "Sabiki Rig", rod = "Halcyon Rod", notes = "Beaucedine Glacier: Ponds only (not Seaside).", size = "Small", stack = 12, maxHook = 3, type = "Fish" },
+	{ name = "Istakoz", skill = 46, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Sinking Minnow", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Istavrit", skill = 37, location = "Talacca Cove", bait = "Lugworm", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Istiridye", skill = 53, location = "Arrapago Reef, Nashmau", bait = "Ball of Crayfish Paste", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Jungle Catfish", skill = 80, location = "Yhoator Jungle, Yuhtunga Jungle", bait = "Ball of Sardine Paste, Ball of Trout Paste, Minnow", rod = "Composite Fishing Rod", notes = "Yhoator Jungle: Front of Temple areas and Underground Pool 1 only. Yuhtunga Jungle: Northeast Pond and Southwest Pond only (not falls or riverside).", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Kalamar", skill = 48, location = "Aht Urhgan Whitegate, Mount Zhayolm, Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Slice of Bluetail", rod = "Halcyon Rod", size = "Small", stack = 12, maxHook = 3, type = "Fish" },
+	{ name = "Kalkanbaligi", skill = 105, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Shrimp Lure", rod = "Composite Fishing Rod", size = "Legendary", stack = 1, type = "Fish" },
+	{ name = "Kaplumbaga", skill = 53, location = "Caedarva Mire", bait = "Frog Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Kayabaligi", skill = 75, location = "Al Zahbi, Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Sinking Minnow", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Kilicbaligi", skill = 62, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Slice of Bluetail", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Lakerda", skill = 41, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Sinking Minnow", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Lamp Marimo", skill = 3, location = "Aydeewa Subterrane", bait = "Fly Lure, Lugworm, Sabiki Rig", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Lik", skill = 140, location = "Lufaise Meadows", bait = "Minnow, Sinking Minnow, Dwarf Pugil", rod = "Composite Fishing Rod", notes = "Lufaise Meadows: Leremieu Lagoon only (not Seaside or river).", size = "Legendary", stack = 1, type = "Fish", keyItem = "Serpent Rumors" },
+	{ name = "Lionhead", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Lungfish", skill = 32, location = "Phanauet Channel", bait = "Shrimp Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Mercanbaligi", skill = 86, location = "Arrapago Reef, Nashmau, Talacca Cove", bait = "Shrimp Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Moat Carp", skill = 11, location = "Al Zahbi, Bastok Markets, Davoi, Dragon's Aery, East Sarutabaruta, Eastern Altepa Desert, Jugner Forest, Korroloka Tunnel, La Theine Plateau, Misareaux Coast, Northern San d'Oria, Port San d'Oria, Rabao, Rolanberry Fields, Temple of Uggalepih, The Boyahda Tree, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle, Zeruhn Mines", bait = "Ball of Insect Paste", rod = "Halcyon Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Davoi: Pond only (not waterfalls or other areas). Korroloka Tunnel: Salt Water side only.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Mola Mola", skill = 135, location = "Open sea route to Al Zahbi, Open sea route to Mhaura", bait = "Shrimp Lure", rod = "Composite Fishing Rod", size = "Legendary", stack = 1, type = "Fish" },
+	{ name = "Monke-Onke", skill = 51, location = "East Sarutabaruta, Giddeus, Yhoator Jungle, Yuhtunga Jungle", bait = "Shrimp Lure", rod = "Composite Fishing Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Giddeus: Giddeus Spring only (not other ponds). Yhoator Jungle: Underground Pool 1 only. Yuhtunga Jungle: Northeast Pond only.", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Moorish Idol", skill = 26, location = "Bibiki Bay, Manaclipper", bait = "Shrimp Lure, Worm Lure", rod = "Halcyon Rod", notes = "Bibiki Bay: PI beaches only (South/North/West/East) - not available on BB side.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Morinabaligi", skill = 94, location = "Bhaflau Thickets, Wajaom Woodlands", bait = "Ball of Sardine Paste, Ball of Trout Paste", rod = "Halcyon Rod", size = "Small", stack = 1, type = "Fish" },
+	{ name = "Muddy Siredon", skill = 18, location = "Carpenters' Landing, Phanauet Channel", bait = "Frog Lure", rod = "Halcyon Rod", notes = "Carpenters' Landing: inland waterways and landing docks (not the Central Landing).", size = "Small", stack = 1, type = "Fish" },
+	{ name = "Nebimonite", skill = 27, location = "Sea Serpent Grotto, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Ball of Crayfish Paste", rod = "Halcyon Rod", notes = "Sea Serpent Grotto: Pond Under a Bridge and Mythril door area only.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Noble Lady", skill = 66, location = "Manaclipper, Open sea route to Al Zahbi, Open sea route to Mhaura, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Sinking Minnow", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Nosteau Herring", skill = 39, location = "Batallia Downs, Beaucedine Glacier, Lower Jeuno, Port Jeuno, Qufim Island", bait = "Ball of Sardine Paste, Lugworm, Shrimp Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Ogre Eel", skill = 35, location = "East Sarutabaruta, South Gustaberg, West Sarutabaruta", bait = "Shrimp Lure", rod = "Halcyon Rod", notes = "East Sarutabaruta: Seaside only (not lake or riverbanks). South Gustaberg and West Sarutabaruta: Seaside only.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Pearlscale", skill = 0, location = "South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Super Scoop", rod = "Goldfish Basket", notes = "Event fish: Sunbreeze Festival", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Phanauet Newt", skill = 4, location = "Carpenters' Landing, Phanauet Channel", bait = "Fly Lure", rod = "Halcyon Rod", notes = "Carpenters' Landing: inland waterways only (not landing docks).", size = "Small", stack = 1, type = "Fish" },
+	{ name = "Pipira", skill = 29, location = "East Sarutabaruta, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle", bait = "Minnow", rod = "Halcyon Rod", notes = "East Sarutabaruta: Lake Tepokalipuka only (not Seaside or riverbanks). Yhoator Jungle: Front of Temple - East Side only. Yuhtunga Jungle: Southwest Waterfall and Southwest Pond only (not Northeast Pond, Gremini Falls, or riverbanks).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Pterygotus", skill = 99, location = "Nashmau", bait = "Lugworm", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Quus", skill = 19, location = "Bibiki Bay, Cape Teriggan, Den of Rancor, East Sarutabaruta, Kazham, Korroloka Tunnel, Lufaise Meadows, Manaclipper, Misareaux Coast, Norg, Port Bastok, Port Windurst, Sea Serpent Grotto, Selbina, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates), South Gustaberg, Valkurm Dunes, West Sarutabaruta", bait = "Lugworm", rod = "Halcyon Rod", size = "Small", stack = 12, maxHook = 3, type = "Fish" },
+	{ name = "Red Terrapin", skill = 53, location = "Davoi, Ghelsba Outpost, Giddeus, Jugner Forest, La Theine Plateau, Pashhow Marshlands, Phanauet Channel, Rolanberry Fields, The Sanctuary of Zi'Tah, West Ronfaure", bait = "Frog Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Rhinochimera", skill = 72, location = "Arrapago Reef", bait = "Sinking Minnow", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Ryugu Titan", skill = 150, location = "Den of Rancor, Manaclipper, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Slice of Cod", rod = "Composite Fishing Rod", notes = "Den of Rancor: Pool F-11 only (not Pool E-8).", size = "Legendary", stack = 1, type = "Fish" },
+	{ name = "Sandfish", skill = 50, location = "Eastern Altepa Desert, Korroloka Tunnel, Kuftal Tunnel, Rabao, Western Altepa Desert", bait = "Worm Lure", rod = "Halcyon Rod", size = "Small", stack = 12, maxHook = 3, type = "Fish" },
+	{ name = "Sazanbaligi", skill = 56, location = "Al Zahbi, Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Ball of Insect Paste, Little Worm, Shrimp Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Sea Zombie", skill = 100, location = "Ship bound for Mhaura (with Pirates), Ship bound for Selbina (with Pirates)", bait = "Drill Calamary, Meatball, Slice of Bluetail", rod = "Composite Fishing Rod", size = "Legendary", stack = 1, type = "Fish" },
+	{ name = "Shall Shell", skill = 53, location = "Bibiki Bay, Buburimu Peninsula, Cape Teriggan, Valkurm Dunes", bait = "Robber Rig", rod = "Halcyon Rod", notes = "Bibiki Bay: PI beaches only (South/North/West/East) - not available on BB side.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Shining Trout", skill = 37, location = "Carpenters' Landing, East Ronfaure, Ghelsba Outpost, Jugner Forest, Phanauet Channel", bait = "Fly Lure, Minnow, Sinking Minnow", rod = "Halcyon Rod", notes = "Carpenters' Landing: South/North Landing only (not central or inland pools). Ghelsba Outpost: River only (not ponds). Jugner Forest: River only.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Silver Shark", skill = 76, location = "Batallia Downs, Sauromugue Champaign, Sea Serpent Grotto, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Halcyon Rod", notes = "Sea Serpent Grotto: Mythril door area only (not Pond Under a Bridge or other areas).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Takitaro", skill = 101, location = "Davoi, Misareaux Coast", bait = "Fly Lure", rod = "Composite Fishing Rod", notes = "Davoi: Basin of a Waterfall only. Misareaux Coast: Cascade Edellaine only.", size = "Legendary", stack = 1, type = "Fish" },
+	{ name = "Tavnazian Goby", skill = 75, location = "Lufaise Meadows, Misareaux Coast", bait = "Minnow", rod = "Halcyon Rod", notes = "Lufaise Meadows: Leremieu Lagoon and Rafeloux River only (not Seaside). Misareaux Coast: Rafeloux River and Cascade Edellaine only (not Seaside).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Three-Eyed Fish", skill = 79, location = "Qufim Island", bait = "Minnow, Slice of Cod", rod = "Composite Fishing Rod", notes = "Qufim Island: Southwest Seaside only (not Northwest or other areas).", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Tiger Cod", skill = 29, location = "Batallia Downs, Beaucedine Glacier, Lower Jeuno, Port Jeuno, Qufim Island, Sauromugue Champaign", bait = "Lugworm, Shrimp Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Tiny Goldfish", skill = 20, location = "Al Zahbi, South Gustaberg, West Ronfaure, East Sarutabaruta, Rabao", bait = "Ball of Insect Paste, Little Worm, Worm Lure, Super Scoop", rod = "Halcyon Rod, Goldfish Basket", notes = "Available in S.Gusta, W.Ron, and E.Saruta during the Sunbreeze Festival event using Goldfish Basket and Super Scoop", size = "Small", stack = 12, maxHook = 3, type = "Fish" },
+	{ name = "Titanic Sawfish", skill = 125, location = "Manaclipper", bait = "Meatball, Slice of Cod", rod = "Composite Fishing Rod", size = "Legendary", stack = 1, type = "Fish" },
+	{ name = "Titanictus", skill = 101, location = "Manaclipper, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates)", bait = "Meatball", rod = "Composite Fishing Rod", size = "Legendary", stack = 1, type = "Fish" },
+	{ name = "Tricolored Carp", skill = 27, location = "Bastok Markets, Davoi, East Ronfaure, Ghelsba Outpost, Giddeus, Gusgen Mines, Jugner Forest, North Gustaberg, Northern San d'Oria, Palborough Mines, Phanauet Channel, Port San d'Oria, The Boyahda Tree, Zeruhn Mines", bait = "Shrimp Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Tricorn", skill = 128, location = "Phanauet Channel", bait = "Fly Lure, Lufaise Fly", rod = "Composite Fishing Rod", size = "Legendary", stack = 1, type = "Fish", keyItem = "Frog Fishing" },
+	{ name = "Trilobite", skill = 59, location = "Bibiki Bay, Manaclipper", bait = "Worm Lure", rod = "Halcyon Rod", notes = "Bibiki Bay: PI - South Beach and PI - North Beach only (not West/East Beach and not BB side).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Turnabaligi", skill = 104, location = "Bhaflau Thickets, Wajaom Woodlands", bait = "Shrimp Lure", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Uskumru", skill = 55, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Minnow, Shrimp Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Veydal Wrasse", skill = 35, location = "Open sea route to Al Zahbi, Open sea route to Mhaura", bait = "Slice of Bluetail", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Vongola Clam", skill = 53, location = "Bibiki Bay, Manaclipper", bait = "Ball of Crayfish Paste, Peeled Crayfish", rod = "Halcyon Rod", notes = "Bibiki Bay: PI beaches only (South/North/West/East) - not available on BB side.", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Yayinbaligi", skill = 31, location = "Caedarva Mire", bait = "Frog Lure, Minnow, Sinking Minnow, Worm Lure", rod = "Composite Fishing Rod", size = "Large", stack = 1, type = "Fish" },
+	{ name = "Yellow Globe", skill = 17, location = "Batallia Downs, Beaucedine Glacier, Buburimu Peninsula, Lower Jeuno, Mhaura, Norg, Open sea route to Al Zahbi, Open sea route to Mhaura, Port Jeuno, Qufim Island, Sauromugue Champaign", bait = "Ball of Crayfish Paste, Sabiki Rig, Worm Lure", rod = "Halcyon Rod", size = "Small", stack = 12, maxHook = 3, type = "Fish" },
+	{ name = "Yilanbaligi", skill = 47, location = "Al Zahbi, Bhaflau Thickets, Mamook, Wajaom Woodlands", bait = "Ball of Sardine Paste, Ball of Trout Paste, Little Worm, Peeled Crayfish, Shell Bug, Sinking Minnow, Worm Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Zafmlug Bass", skill = 43, location = "Bibiki Bay, Cape Teriggan, Manaclipper, Port Bastok, Selbina, South Gustaberg, Valkurm Dunes", bait = "Worm Lure", rod = "Halcyon Rod", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Zebra Eel", skill = 71, location = "Den of Rancor", bait = "Shrimp Lure, Slice of Sardine", rod = "Halcyon Rod", notes = "Den of Rancor: Pool E-8 only (not Pool F-11).", size = "Small", stack = 12, type = "Fish" },
+	{ name = "Arrowwood Log", skill = 4, location = "Beaucedine Glacier, Buburimu Peninsula, Carpenters' Landing, Davoi, Dragon's Aery, East Ronfaure, Jugner Forest, Kazham, Lufaise Meadows, Misareaux Coast, The Boyahda Tree, The Sanctuary of Zi'Tah, Valkurm Dunes, West Ronfaure, Yhoator Jungle, Yuhtunga Jungle", bait = "Any", rod = "Any", stack = 12, type = "Item" },
+	{ name = "Bugbear Mask", skill = 54, location = "Oldton Movalpolos", bait = "Any", rod = "Any", stack = 12, type = "Item" },
+	{ name = "Cobalt Jellyfish", skill = 5, location = "Batallia Downs, Bibiki Bay, Cape Teriggan, Den of Rancor, Kazham, Lower Jeuno, Lufaise Meadows, Manaclipper, Misareaux Coast, Norg, Open sea route to Al Zahbi, Open sea route to Mhaura, Port Bastok, Port Jeuno, Sea Serpent Grotto, Selbina, South Gustaberg, Valkurm Dunes", bait = "Ball of Crayfish Paste, Ball of Insect Paste, Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Frog Lure, Little Worm, Lizard Lure, Lufaise Fly, Lugworm, Meatball, Minnow, Peeled Crayfish, Peeled Lobster, Robber Rig, Rogue Rig, Sabiki Rig, Shell Bug, Shrimp Lure, Sinking Minnow, Slice Of Bluetail, Slice Of Carp, Slice Of Cod, Slice of Sardine, Worm Lure", rod = "Halcyon Rod", stack = 12, type = "Item" },
+	{ name = "Copper ring", skill = 24, location = "Bastok Markets, Bastok Mines, Beaucedine Glacier, Bostaunieux Oubliette, Buburimu Peninsula, Dragon's Aery, East Ronfaure, Eastern Altepa Desert, Fei'Yin, Heavens Tower, Kazham, Lower Jeuno, Mhaura, Norg, Northern San d'Oria, Oldton Movalpolos, Port Jeuno, Qufim Island, Ro'Maeve, Ru'Aun Gardens, Temple of Uggalepih, The Boyahda Tree, The Shrine of Ru'Avitau, Yhoator Jungle, Yuhtunga Jungle", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Coral Fragment", skill = 74, location = "Bibiki Bay, Den of Rancor, Korroloka Tunnel, Labyrinth of Onzozo, Sea Serpent Grotto", bait = "Any", rod = "Any", notes = "Bibiki Bay: PI beaches only (not BB side). Den of Rancor: Pools E-8 and F-11 only (not Misc Water). Sea Serpent Grotto: not in Gold door area or Misc Puddles.", stack = 12, type = "Item" },
+	{ name = "Damp Scroll", skill = 20, location = "Sea Serpent Grotto", bait = "Any", rod = "Any", notes = "Sea Serpent Grotto: Pond Under a Bridge only.", stack = 1, type = "Item" },
+	{ name = "Denizanasi", skill = 5, location = "Aht Urhgan Whitegate, Mount Zhayolm", bait = "Ball of Crayfish Paste, Ball of Insect Paste, Ball of Sardine Paste, Ball of Trout Paste, Fly Lure, Frog Lure, Little Worm, Lizard Lure, Lufaise Fly, Lugworm, Meatball, Minnow, Peeled Crayfish, Peeled Lobster, Robber Rig, Rogue Rig, Sabiki Rig, Shell Bug, Shrimp Lure, Sinking Minnow, Slice Of Bluetail, Slice Of Carp, Slice Of Cod, Slice of Sardine, Worm Lure", rod = "Halcyon Rod", stack = 12, type = "Item" },
+	{ name = "Fish Scale Shield", skill = 7, location = "Bibiki Bay, Den of Rancor, Qufim Island, Rolanberry Fields", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Gil", skill = 1, location = "Port Windurst", bait = "Any", rod = "Any", stack = 0, type = "Item" },
+	{ name = "Hydrogauge", skill = 7, location = "Aht Urhgan Whitegate, Al Zahbi, Nashmau, Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Mithra Snare", skill = 30, location = "Valkurm Dunes", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Moblin Mask", skill = 54, location = "Oldton Movalpolos", bait = "Any", rod = "Any", stack = 12, type = "Item" },
+	{ name = "Mythril Dagger", skill = 90, location = "Beaucedine Glacier, Dragon's Aery, Port Jeuno", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Mythril Sword", skill = 90, location = "Batallia Downs, Beaucedine Glacier, Bostaunieux Oubliette, Dragon's Aery, Gusgen Mines, Qufim Island, Rolanberry Fields, Sauromugue Champaign", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Norg Shell", skill = 14, location = "Sea Serpent Grotto", bait = "Any", rod = "Any", notes = "Sea Serpent Grotto: Other Seaside, Pond Under a Bridge, and Mythril door area only (not Gold door or Misc Puddles).", stack = 1, type = "Item" },
+	{ name = "Pamtam Kelp", skill = 3, location = "Bibiki Bay, Buburimu Peninsula, Den of Rancor, East Sarutabaruta, Kazham, Manaclipper, Mhaura, Norg, Open sea route to Al Zahbi, Open sea route to Mhaura, Port Windurst, Sea Serpent Grotto, West Sarutabaruta", bait = "Any", rod = "Any", stack = 12, type = "Item" },
+	{ name = "Ripped cap", skill = 20, location = "Kazham, Port Windurst", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Rusty Bucket", skill = 1, location = "Al Zahbi, Bastok Markets, Bastok Mines, Bhaflau Thickets, Bibiki Bay, Buburimu Peninsula, Carpenters' Landing, Dangruf Wadi, Davoi, Dragon's Aery, East Sarutabaruta, Giddeus, Gusgen Mines, Jugner Forest, Kazham, Korroloka Tunnel, Kuftal Tunnel, La Theine Plateau, Lower Jeuno, Mamook, Manaclipper, Norg, North Gustaberg, Open sea route to Al Zahbi, Open sea route to Mhaura, Ordelle's Caves, Palborough Mines, Phanauet Channel, Port Bastok, Port Jeuno, Port San d'Oria, Rabao, Rolanberry Fields, Sea Serpent Grotto, Selbina, South Gustaberg, Tavnazian Safehold, Valkurm Dunes, Wajaom Woodlands, West Ronfaure, West Sarutabaruta, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle, Zeruhn Mines", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Rusty Cap", skill = 30, location = "Bibiki Bay, Buburimu Peninsula, Davoi, Den of Rancor, Jugner Forest, Korroloka Tunnel, Kuftal Tunnel, La Theine Plateau, Mhaura, Ordelle's Caves, Pashhow Marshlands, Rabao, Rolanberry Fields, South Gustaberg, Valkurm Dunes, Western Altepa Desert, Yughott Grotto", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Rusty Greatsword", skill = 60, location = "Batallia Downs, Davoi, Den of Rancor, Eastern Altepa Desert, Korroloka Tunnel, Oldton Movalpolos, Sea Serpent Grotto", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Rusty Leggings", skill = 7, location = "Al Zahbi, Arrapago Reef, Aydeewa Subterrane, Bastok Markets, Bastok Mines, Bibiki Bay, Bostaunieux Oubliette, Buburimu Peninsula, Caedarva Mire, Cape Teriggan, Carpenters' Landing, Davoi, Dragon's Aery, East Sarutabaruta, Giddeus, Gusgen Mines, Jugner Forest, Kazham, Korroloka Tunnel, Labyrinth of Onzozo, Lower Delkfutt's Tower, Lower Jeuno, Mamook, Mhaura, Middle Delkfutt's Tower, Nashmau, Norg, North Gustaberg, Northern San d'Oria, Open sea route to Al Zahbi, Open sea route to Mhaura, Ordelle's Caves, Port Bastok, Port Jeuno, Port San d'Oria, Port Windurst, Qufim Island, Rabao, Rolanberry Fields, Sauromugue Champaign, Selbina, South Gustaberg, Talacca Cove, The Boyahda Tree, Upper Delkfutt's Tower, Valkurm Dunes, Wajaom Woodlands, West Ronfaure, West Sarutabaruta, Western Altepa Desert, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yughott Grotto, Yuhtunga Jungle, Zeruhn Mines", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Rusty Pick", skill = 40, location = "Batallia Downs, Buburimu Peninsula, Davoi, Gusgen Mines, Jugner Forest, Korroloka Tunnel, Oldton Movalpolos, Pashhow Marshlands, Rolanberry Fields, Yughott Grotto", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Rusty Subligar", skill = 5, location = "Aht Urhgan Whitegate, Al Zahbi, Arrapago Reef, Aydeewa Subterrane, Bastok Markets, Bastok Mines, Beaucedine Glacier, Bhaflau Thickets, Bibiki Bay, Bostaunieux Oubliette, Buburimu Peninsula, Den of Rancor, East Sarutabaruta, Gusgen Mines, Heavens Tower, Jugner Forest, Kazham, Korroloka Tunnel, Kuftal Tunnel, Lower Jeuno, Mamook, Mount Zhayolm, Nashmau, Norg, North Gustaberg, Northern San d'Oria, Ordelle's Caves, Port Bastok, Port Jeuno, Port San d'Oria, Port Windurst, Qufim Island, Quicksand Caves, Rolanberry Fields, Sauromugue Champaign, Selbina, Ship bound for Mhaura, Ship bound for Mhaura (with Pirates), Ship bound for Selbina, Ship bound for Selbina (with Pirates), South Gustaberg, Talacca Cove, Valkurm Dunes, Wajaom Woodlands, West Sarutabaruta, Windurst Walls, Windurst Waters, Windurst Woods, Yhoator Jungle, Yuhtunga Jungle, Zeruhn Mines", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Silver Ring", skill = 34, location = "Batallia Downs, Beaucedine Glacier, Buburimu Peninsula, Fei'Yin, Giddeus, Heavens Tower, Jugner Forest, Mhaura, Misareaux Coast, Ordelle's Caves, Pashhow Marshlands, Port Jeuno, Qufim Island, Ro'Maeve, Ru'Aun Gardens, South Gustaberg, The Shrine of Ru'Avitau, Valkurm Dunes, Yhoator Jungle, Yughott Grotto", bait = "Any", rod = "Any", stack = 1, type = "Item" },
+	{ name = "Tarutaru Snare", skill = 30, location = "Valkurm Dunes", bait = "Any", rod = "Any", stack = 1, type = "Item" },
 	{ name = "Abyssal Pugil", skill = 0, location = "Silver Sea route to Al Zahbi, Silver Sea route to Nashmau", bait = "Any", rod = "Any", type = "Monster" },
 	{ name = "Acid Grease", skill = 0, location = "Bostaunieux Oubliette", bait = "Any", rod = "Any", type = "Monster" },
 	{ name = "Aipaloovik [NM]", skill = 0, location = "Phanauet Channel", bait = "Any", rod = "Any", type = "Monster" },
@@ -1489,6 +1492,7 @@ local function reset_guide_filters()
     guideFilters.location = "All"
     guideFilters.skillRange = "All"
     guideFilters.catchType = "All"
+    guideFilters.size = "All"
     guideFilters.showUncaught = true
 end
 
@@ -1497,6 +1501,7 @@ local function invalidate_guide_cache()
     guideFilterCache.lastLocation = ""
     guideFilterCache.lastSkillRange = ""
     guideFilterCache.lastCatchType = ""
+    guideFilterCache.lastSize = ""
     guideFilterCache.lastShowUncaught = not guideFilters.showUncaught
 end
 
@@ -1577,17 +1582,75 @@ local function find_canonical_guide_name(candidate)
     return nil
 end
 
+-- Size / stack display for the Guide tab. Data (size, stack, maxHook) lives on
+-- each fishingGuide entry and comes from LandSandBoat's fishing_fish.sql
+-- (size_type, legendary, max_hook) and item_basic.sql (stackSize). Globals, not
+-- locals, so the guide window's nested closures don't gain upvalues.
+ANGLIN_GUIDE_SIZE_TAGS = { Small = " [S]", Large = " [L]", Legendary = " [LEG]" }
+
+function anglin_guide_size_tag(fish)
+    return (fish.size and ANGLIN_GUIDE_SIZE_TAGS[fish.size]) or ""
+end
+
+function anglin_abgr_to_rgba(c)
+    return {
+        bit.band(c, 0xFF) / 255,
+        bit.rshift(bit.band(c, 0xFF00), 8) / 255,
+        bit.rshift(bit.band(c, 0xFF0000), 16) / 255,
+        bit.rshift(bit.band(c, 0xFF000000), 24) / 255,
+    }
+end
+
+-- Draws one line like "Size: Small  |  Stack: 12  |  Up to 3 per bite".
+-- compact = true gives the shorter tooltip form ("Small | Stacks to 12 | ...").
+-- Returns false (and draws nothing) for entries without size/stack data.
+function anglin_guide_draw_size_stack(fish, compact)
+    if not fish.size and not fish.stack then return false end
+    local drewAny = false
+    local function divider()
+        imgui.SameLine()
+        imgui.TextColored(anglin_abgr_to_rgba(Colors.TextMuted), "|")
+        imgui.SameLine()
+    end
+    if fish.size then
+        local label = fish.size == "Legendary" and "Large (Legendary)" or fish.size
+        if not compact then label = "Size: " .. label end
+        local color = (fish.size == "Legendary" and Colors.Legendary)
+            or (fish.size == "Large" and Colors.SizeLarge) or Colors.Small
+        imgui.TextColored(anglin_abgr_to_rgba(color), label)
+        drewAny = true
+    end
+    if fish.stack then
+        if drewAny then divider() end
+        local label
+        if fish.stack > 1 then
+            label = compact and string.format("Stacks to %d", fish.stack) or string.format("Stack: %d", fish.stack)
+        else
+            label = compact and "Does not stack" or "Stack: Does not stack"
+        end
+        imgui.TextUnformatted(label)
+        drewAny = true
+    end
+    if fish.maxHook and fish.maxHook > 1 then
+        if drewAny then divider() end
+        imgui.TextColored(anglin_abgr_to_rgba(Colors.Accent), string.format("Up to %d per bite", fish.maxHook))
+    end
+    return true
+end
+
 local function get_filtered_guide_enhanced()
     local currentBait = guideFilters.bait
     local currentLocation = guideFilters.location
     local currentSkillRange = guideFilters.skillRange
     local currentCatchType = guideFilters.catchType
+    local currentSize = guideFilters.size
     local currentShowUncaught = guideFilters.showUncaught
     
     if guideFilterCache.lastBait == currentBait and
        guideFilterCache.lastLocation == currentLocation and
        guideFilterCache.lastSkillRange == currentSkillRange and
        guideFilterCache.lastCatchType == currentCatchType and
+       guideFilterCache.lastSize == currentSize and
        guideFilterCache.lastShowUncaught == currentShowUncaught then
         return guideFilterCache.filteredList, guideFilterCache.totalFish, guideFilterCache.totalCaught
     end
@@ -1643,6 +1706,14 @@ local function get_filtered_guide_enhanced()
             end
         end
         
+        -- Size filter: only Fish entries carry a size, so Items/Monsters drop
+        -- out whenever a specific size is picked.
+        if passesFilter and currentSize ~= "All" then
+            if fish.size ~= currentSize then
+                passesFilter = false
+            end
+        end
+        
         if passesFilter then
             local caught = false
             local lowerFishName = normalize_catch_name(fish.name)
@@ -1664,6 +1735,7 @@ local function get_filtered_guide_enhanced()
     guideFilterCache.lastLocation = currentLocation
     guideFilterCache.lastSkillRange = currentSkillRange
     guideFilterCache.lastCatchType = currentCatchType
+    guideFilterCache.lastSize = currentSize
     guideFilterCache.lastShowUncaught = currentShowUncaught
     guideFilterCache.filteredList = filteredList
     guideFilterCache.totalFish = totalFish
@@ -3799,6 +3871,18 @@ local function render_guide_window()
             imgui.Dummy({20, 0})
             imgui.SameLine()
             
+            imgui.TextUnformatted("Size:")
+            imgui.SameLine()
+            imgui.PushItemWidth(120)
+            render_combo("##SizeFilter", guideFilterOptionsCache.sizes, guideFilters.size, function(selected)
+                guideFilters.size = selected
+            end)
+            imgui.PopItemWidth()
+            
+            imgui.SameLine()
+            imgui.Dummy({20, 0})
+            imgui.SameLine()
+            
             local showUncaught = { guideFilters.showUncaught }
             if imgui.Checkbox("Show Uncaught Fish", showUncaught) then
                 guideFilters.showUncaught = showUncaught[1]
@@ -3833,7 +3917,7 @@ local function render_guide_window()
                     local skillStr = fish.type == "Fish" and string.format(" (Skill: %d)", fish.skill) or ""
                     local typeTag = fish.type == "Monster" and " [MOB]" or (fish.type == "Item" and " [ITEM]" or "")
                     local kiTag = fish.keyItem and " [KI]" or ""
-                    local displayName = fish.name .. typeTag .. kiTag .. skillStr
+                    local displayName = fish.name .. typeTag .. kiTag .. anglin_guide_size_tag(fish) .. skillStr
                     if not caught then
                         imgui.PushStyleColor(ImGuiCol_Text, Colors.UncaughtColor)
                     else
@@ -3864,6 +3948,7 @@ local function render_guide_window()
                         end
                         
                         imgui.Separator()
+                        anglin_guide_draw_size_stack(fish, false)
                         imgui.TextWrapped(string.format("Location: %s", fish.location))
                         if fish.type ~= "Monster" then
                             imgui.TextWrapped(string.format("Bait/Lure: %s", fish.bait))
@@ -3905,6 +3990,7 @@ local function render_guide_window()
                         imgui.TextUnformatted(fish.name)
                         imgui.Separator()
                         imgui.TextUnformatted(string.format("Skill: %d", fish.skill))
+                        anglin_guide_draw_size_stack(fish, true)
                         imgui.TextWrapped(string.format("Location: %s", fish.location))
                         if fish.type ~= "Monster" then
                             imgui.TextWrapped(string.format("Bait: %s", fish.bait))
