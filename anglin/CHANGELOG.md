@@ -1,3 +1,6 @@
+VERSION 4.5
+* Added size/stacking information to the guide tab, along with which fish you can catch more than 1 of. Added new filters for this stuff.
+
 VERSION 4.4.1
 * Minor bugfix - /anglin suggest was not properly targetting the Skillups window after adding the Rod Breaking tab borked the offset. I am dumb. Sorry :)
 
